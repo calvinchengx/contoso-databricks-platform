@@ -24,12 +24,19 @@ def main() -> int:
         shutil.copytree(product / name, dest)
 
     host = t.host
+    dbt_host = host.replace("https://", "").replace("http://", "")
     path = wh.http_path
     uri = f"{host}{path}"
+    (work / "macros" / "databricks_create_schema.sql").write_text(
+        "{% macro databricks__create_schema(relation) -%}\n"
+        "  {# Provision owns UC schemas. Unity Catalog OSS returns 400 when the schema exists. #}\n"
+        "{%- endmacro %}\n",
+        encoding="utf-8",
+    )
     env = os.environ.copy()
     env.update(
         {
-            "DATABRICKS_HOST": host,
+            "DATABRICKS_HOST": dbt_host,
             "DATABRICKS_TOKEN": t.token,
             "DATABRICKS_HTTP_PATH": path,
             "DATABRICKS_CONNECTION_URI": uri,
