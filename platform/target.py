@@ -44,6 +44,8 @@ def _emulator_pat() -> str:
         pass
     import subprocess
 
+    dest = ROOT / "data" / "admin.pat"
+    dest.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         "docker",
         "compose",
@@ -57,16 +59,12 @@ def _emulator_pat() -> str:
         "compose/sources.yml",
         "-f",
         "compose/governance.yml",
-        "exec",
-        "-T",
-        "databricks",
-        "cat",
-        "/data/admin.pat",
+        "cp",
+        "databricks:/data/admin.pat",
+        str(dest),
     ]
-    try:
-        return subprocess.check_output(cmd, cwd=ROOT).decode().strip()
-    except Exception:
-        return ""
+    subprocess.check_call(cmd, cwd=ROOT)
+    return dest.read_text(encoding="utf-8").strip()
 
 
 def landing_path() -> str:
