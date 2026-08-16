@@ -11,7 +11,11 @@ from target import CATALOG, T, WAREHOUSE, WORKSPACE
 def main() -> int:
     t = T()
     w = t.workspace_client()
-    existing = {wh.name: wh for wh in w.warehouses.list()}
+    existing = {}
+    try:
+        existing = {wh.name: wh for wh in w.warehouses.list()}
+    except TypeError:
+        existing = {}
     if WAREHOUSE in existing:
         wh = existing[WAREHOUSE]
     else:
