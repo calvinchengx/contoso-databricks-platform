@@ -12,3 +12,4 @@ gold/tests/
 gold/target/
 gold/logs/
 .pytest_cache/
+data/

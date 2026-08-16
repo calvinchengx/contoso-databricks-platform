@@ -57,7 +57,7 @@ def test_emulator_only_in_target_resolver():
         if p in allowed:
             continue
         text = p.read_text(encoding="utf-8")
-        if "localhost:8447" in text or "admin.pat" in text:
+        if "127.0.0.1:18470" in text or "admin.pat" in text:
             hits.append(p.name)
     assert hits == []
 

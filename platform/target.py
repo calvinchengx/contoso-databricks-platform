@@ -18,9 +18,16 @@ WAREHOUSE = "contoso_warehouse"
 CATALOG = "contoso"
 LANDING_NAME = "landing"
 TABLES_NAME = "tables"
+ROOT = Path(__file__).resolve().parent.parent
 
 
 def T():
+    os.environ.setdefault("DATABRICKS_EMULATOR_URL", "http://127.0.0.1:18470")
+    os.environ.setdefault("DATABRICKS_DATA_DIR", str(ROOT / "data"))
+    os.environ.setdefault("DATABRICKS_SPARK_CONNECT_URL", "http://127.0.0.1:18170")
+    os.environ.setdefault("DATABRICKS_UC_URL", "http://127.0.0.1:18471")
+    os.environ.setdefault("DATABRICKS_WAREHOUSE", WAREHOUSE)
+    os.environ.setdefault("OM_URL", "http://127.0.0.1:18585/api/v1")
     return databricks_target.target()
 
 

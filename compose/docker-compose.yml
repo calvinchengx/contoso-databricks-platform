@@ -76,7 +76,7 @@ services:
     ports:
       - "18470:8447"
     volumes:
-      - dbx-data:/data
+      - ${DATABRICKS_DATA:-./data}:/data
       - ${DELTA_DATA:-/tmp/contoso-dbx-delta}:/data/delta
     environment:
       DATABRICKS_DISABLE_TLS: "1"
@@ -90,6 +90,3 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-
-volumes:
-  dbx-data:
