@@ -3,7 +3,7 @@
 A consumer of [`databricks-emulator`](https://github.com/calvinchengx/databricks-emulator)
 and of the portable [`contoso-data-product`](https://github.com/calvinchengx/contoso-data-product).
 
-The Fabric sibling is [`contoso-data-platform`](https://github.com/calvinchengx/contoso-data-platform).
+The Fabric sibling is [`contoso-fabric-platform`](https://github.com/calvinchengx/contoso-fabric-platform).
 A data engineer writes bronze/silver Spark and gold dbt SQL once. This repo
 wraps that product in Databricks Jobs / warehouse dbt / Unity Catalog.
 OpenMetadata is the shared human catalog.

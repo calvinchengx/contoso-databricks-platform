@@ -1,5 +1,5 @@
 # OpenMetadata — the human catalog. UC is the engine catalog.
-# Sibling-owned, same pins as contoso-data-platform.
+# Sibling-owned, same pins as contoso-fabric-platform.
 services:
   om-postgresql:
     profiles: [governance]
