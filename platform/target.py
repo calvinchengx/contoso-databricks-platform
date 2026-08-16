@@ -78,12 +78,6 @@ def tables_path() -> str:
     return f"{root}/{TABLES_NAME}"
 
 
-def managed_storage_root() -> str:
-    """URI UC OSS uses to allocate managed tables. Sail writes under this path."""
-    root = os.environ.get("CONTOSO_DELTA", "/data/delta")
-    return f"file://{root}/managed"
-
-
 def host_delta() -> Path:
     """The same volume, as the operator's host sees it."""
     return Path(os.environ.get("DELTA_DATA", "/tmp/contoso-dbx-delta"))

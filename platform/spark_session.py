@@ -30,4 +30,8 @@ def connect():
         f"use_ssl=false;token={t.token};x-databricks-cluster-id={cluster_id}"
     )
     os.environ.setdefault("SPARK_CONNECT_GRPC_MESSAGE_MAX_SIZE", "134217728")
-    return DatabricksSession.builder.remote(remote).getOrCreate()
+    spark = DatabricksSession.builder.remote(remote).getOrCreate()
+    # Sail 0.24 advertises 3GB. databricks-connect 19.1 does int() on that
+    # string inside createDataFrame, so bronze never starts.
+    spark.conf.set("spark.sql.session.localRelationSizeLimit", "3221225472")
+    return spark

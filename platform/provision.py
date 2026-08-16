@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from target import CATALOG, T, WAREHOUSE, WORKSPACE, managed_storage_root
+from target import CATALOG, T, WAREHOUSE, WORKSPACE
 
 
 def main() -> int:
@@ -22,10 +22,7 @@ def main() -> int:
         created = w.warehouses.create(name=WAREHOUSE).result()
         wh = created
     try:
-        create = {"name": CATALOG}
-        if t.is_emulator:
-            create["storage_root"] = managed_storage_root()
-        w.catalogs.create(**create)
+        w.catalogs.create(name=CATALOG)
     except Exception as exc:
         if "already" not in str(exc).lower() and "RESOURCE_ALREADY_EXISTS" not in str(exc):
             # UC OSS create is idempotent enough; a 409 is fine.
