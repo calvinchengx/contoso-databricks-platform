@@ -23,24 +23,15 @@ anything that works here works for anyone holding the same release. The image
 tag and the wheel come from the same release, and
 `test_the_target_wheel_matches_the_pinned_release` fails if they drift.
 
-## Before you clone
-
-**One dependency is still a sibling checkout.**
-[`contoso-data-product`](https://github.com/calvinchengx/contoso-data-product)
-publishes no release yet, so there is nothing to point at and `uv` needs it on
-disk next to this one:
-
-```
-your-checkouts/
-  contoso-databricks-platform/   <- here
-  contoso-data-product/          <- ../contoso-data-product
-```
-
-Without it, `uv sync` fails with `Distribution not found`. Publishing that
-package is the remaining step; `databricks-emulator` no longer needs to be
-checked out at all.
+[`contoso-data-product`](https://github.com/calvinchengx/contoso-data-product),
+the transforms and gold SQL themselves, comes from its own release wheel on the
+same terms. **So this repository clones and builds on its own**, with no sibling
+checkouts, and its CI checks out one repository and nothing else. That absence is
+the proof: reach for a source tree again and `uv sync` fails there.
 
 ```sh
+git clone https://github.com/calvinchengx/contoso-databricks-platform
+cd contoso-databricks-platform
 make doctor     # what is ready, and what is not
 make up         # start the stack
 make verify     # run the platform end to end
