@@ -1,10 +1,15 @@
 # The repository's own gate: does it hold together, on all three platforms?
 #
-# Path deps are `../contoso-data-product` and
-# `../databricks-emulator/python/databricks-target`. actions/checkout refuses
-# `path: ../…` (outside the workspace), so this job checks the consumer out
-# *next to* those siblings under GITHUB_WORKSPACE, the same layout a local
-# clone in emulators/ has.
+# ONE path dep remains, `../contoso-data-product`, because that package
+# publishes no release to install from. actions/checkout refuses `path: ../…`
+# (outside the workspace), so this job checks the consumer out *next to* that
+# sibling under GITHUB_WORKSPACE, the same layout a local clone in emulators/
+# has.
+#
+# databricks-emulator is deliberately NOT checked out. `databricks-target` now
+# installs from the wheel its release publishes, and the absence of that
+# checkout is what proves it: if anything still reached for the source tree,
+# `uv sync` here would fail.
 name: CI
 
 on:
@@ -34,10 +39,6 @@ jobs:
         with:
           repository: calvinchengx/contoso-data-product
           path: contoso-data-product
-      - uses: actions/checkout@v7
-        with:
-          repository: calvinchengx/databricks-emulator
-          path: databricks-emulator
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
           version: "0.12.3"

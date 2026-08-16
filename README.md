@@ -16,25 +16,29 @@ which runs **the same data product** on Microsoft Fabric. That pairing is the
 point of both repositories: a data engineer writes bronze/silver Spark and gold
 dbt SQL once, and the platform it lands on is a wrapper, not a rewrite.
 
+It runs against a **published release**. `databricks-target`, the client that
+resolves the emulator/real toggle, is installed from the wheel a
+`databricks-emulator` release ships, not from that repository's source tree, so
+anything that works here works for anyone holding the same release. The image
+tag and the wheel come from the same release, and
+`test_the_target_wheel_matches_the_pinned_release` fails if they drift.
+
 ## Before you clone
 
-**This repository does not stand alone yet.** The emulator itself runs as a
-pinned published image, but two Python dependencies are resolved from *sibling
-checkouts* through `[tool.uv.sources]`, so `uv` needs them on disk next to this
-one:
+**One dependency is still a sibling checkout.**
+[`contoso-data-product`](https://github.com/calvinchengx/contoso-data-product)
+publishes no release yet, so there is nothing to point at and `uv` needs it on
+disk next to this one:
 
 ```
 your-checkouts/
   contoso-databricks-platform/   <- here
   contoso-data-product/          <- ../contoso-data-product
-  databricks-emulator/           <- ../databricks-emulator/python/databricks-target
 ```
 
-Worth knowing rather than discovering: `databricks-emulator` **does** publish a
-`databricks_target` wheel on its releases, and the Fabric sibling installs its
-equivalent from the release rather than from a path. Moving to the published
-wheel here is unfinished work, not a design decision, and until it happens a
-lone clone fails at `uv sync` with `Distribution not found`.
+Without it, `uv sync` fails with `Distribution not found`. Publishing that
+package is the remaining step; `databricks-emulator` no longer needs to be
+checked out at all.
 
 ```sh
 make doctor     # what is ready, and what is not

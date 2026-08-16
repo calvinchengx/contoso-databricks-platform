@@ -70,6 +70,39 @@ def test_product_is_imported_not_restated():
     assert "decimal(19,4)" not in silver
 
 
+def test_the_target_wheel_matches_the_pinned_release():
+    """The client wheel and the image come from the SAME release.
+
+    `databricks-target` is installed from a published wheel rather than from
+    the emulator's source tree, which is what makes this repository a consumer:
+    it builds from what a release ships, so anything that works here works for
+    anyone with the same release.
+
+    That puts the version in two files, and a copied version with nothing
+    checking it is a second source of truth that drifts. This is the check.
+    A workspace binary and a client that disagree about the contract is the one
+    mismatch this repository exists to notice.
+    """
+    pins = {}
+    for line in (ROOT / "versions.env").read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            pins[k.strip()] = v.strip()
+    version = pins["DATABRICKS_EMULATOR_VERSION"]
+
+    proj = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert "databricks-target = { url =" in proj, (
+        "databricks-target must come from the published wheel, not a path: a "
+        "consumer that reads the emulator's source tree proves nothing"
+    )
+    expected = f"databricks-emulator/releases/download/v{version}/"
+    assert expected in proj, (
+        f"the databricks-target wheel does not come from the pinned release "
+        f"v{version}. Run `python scripts/set_release.py {version}`."
+    )
+
+
 def test_set_release_moves_only_the_emulator_pin(tmp_path, monkeypatch):
     import importlib.util
 
