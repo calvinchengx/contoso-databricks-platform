@@ -133,3 +133,16 @@ the product repository fails unless Fabric and Databricks report the same
 `fct_revenue_summary` aggregates and the same contract names.
 
 Apache-2.0.
+
+## Related projects
+
+The same Contoso data, on three engines:
+[`contoso-fabric-platform`](https://github.com/calvinchengx/contoso-fabric-platform),
+this repo, and
+[`contoso-snowflake-platform`](https://github.com/calvinchengx/contoso-snowflake-platform).
+The transforms they share live in
+[`contoso-data-product`](https://github.com/calvinchengx/contoso-data-product).
+
+The emulators underneath are the [**azure-emulators**](https://github.com/calvinchengx/azure-emulators) family — entra, Key
+Vault, ARM, Fabric, API Management and
+[`databricks-emulator`](https://github.com/calvinchengx/databricks-emulator).
