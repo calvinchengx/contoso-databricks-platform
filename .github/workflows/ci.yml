@@ -1,3 +1,10 @@
+# The repository's own gate: does it hold together, on all three platforms?
+#
+# Path deps are `../contoso-data-product` and
+# `../databricks-emulator/python/databricks-target`. actions/checkout refuses
+# `path: ../…` (outside the workspace), so this job checks the consumer out
+# *next to* those siblings under GITHUB_WORKSPACE, the same layout a local
+# clone in emulators/ has.
 name: CI
 
 on:
@@ -16,24 +23,34 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: contoso-databricks-platform
     steps:
       - uses: actions/checkout@v7
+        with:
+          path: contoso-databricks-platform
+      - uses: actions/checkout@v7
+        with:
+          repository: calvinchengx/contoso-data-product
+          path: contoso-data-product
+      - uses: actions/checkout@v7
+        with:
+          repository: calvinchengx/databricks-emulator
+          # Until calvinchengx/databricks-emulator#22 merges, main has no
+          # python/databricks-target. Drop this ref after that lands.
+          ref: feat/databricks-target
+          path: databricks-emulator
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
           version: "0.12.3"
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Checkout sibling product (path dep)
-        uses: actions/checkout@v7
-        with:
-          repository: calvinchengx/contoso-data-product
-          path: ../contoso-data-product
-      - name: Checkout databricks-target
-        uses: actions/checkout@v7
-        with:
-          repository: calvinchengx/databricks-emulator
-          path: ../databricks-emulator
+      - if: matrix.os == 'windows-latest'
+        run: choco install make --no-progress -y
+        working-directory: ${{ github.workspace }}
       - run: uv sync --frozen --group dev
-      - run: uv run --frozen --group dev python -m pytest tests -q
       - run: make help
+      - run: make lint
+      - run: make test
