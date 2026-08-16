@@ -12,8 +12,17 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 VERSIONS = ROOT / "versions.env"
+PYPROJECT = ROOT / "pyproject.toml"
 TRACKS_THE_RELEASE = ("DATABRICKS_EMULATOR_VERSION",)
 SEMVER = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.\-]+)?$")
+
+# The release tag inside the databricks-target wheel URL in pyproject.toml.
+# The image pin and the Python client must come from the SAME release: a
+# workspace binary and a client that disagree about the contract is the one
+# mismatch this repository exists to notice, not to ship.
+WHEEL_TAG = re.compile(
+    r"(databricks-emulator/releases/download/v)\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.\-]+)?(/)"
+)
 
 
 def set_version(text: str, version: str) -> tuple[str, dict[str, str]]:
@@ -31,6 +40,17 @@ def set_version(text: str, version: str) -> tuple[str, dict[str, str]]:
     return "".join(lines), moved
 
 
+def set_wheel(text: str, version: str) -> tuple[str, int]:
+    """Point the databricks-target wheel URL at release `version`.
+
+    Only the tag moves. The wheel's own version is the package's, not the
+    emulator's, and the two are deliberately unrelated: a release can ship an
+    unchanged client.
+    """
+    new, n = WHEEL_TAG.subn(rf"\g<1>{version}\g<2>", text)
+    return new, n
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         sys.exit("usage: set_release.py <version>   e.g. set_release.py 0.2.0")
@@ -46,6 +66,19 @@ def main() -> int:
     for key, old in moved.items():
         note = "  (unchanged)" if old == version else ""
         print(f"  {key}: {old} -> {version}{note}")
+
+    # The Python client comes from the same release as the image.
+    proj = PYPROJECT.read_text(encoding="utf-8")
+    moved_wheel, n = set_wheel(proj, version)
+    if n == 0:
+        sys.exit(
+            f"{PYPROJECT.name} has no databricks-target wheel URL to move. "
+            f"If it went back to a path source, this script and "
+            f"test_the_target_wheel_matches_the_pinned_release both need a look."
+        )
+    PYPROJECT.write_text(moved_wheel, encoding="utf-8")
+    print(f"  databricks-target wheel: -> v{version}")
+    print("  run `uv lock` to refresh the lockfile")
     return 0
 
 

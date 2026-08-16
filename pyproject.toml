@@ -31,7 +31,15 @@ conflicts = [
 ]
 
 [tool.uv.sources]
-databricks-target = { path = "../databricks-emulator/python/databricks-target" }
+# THE PUBLISHED WHEEL, not the emulator's source tree. This repository is a
+# consumer: it must build from what a release ships, or it proves nothing about
+# what anyone else can do with one. The tag here is kept equal to
+# DATABRICKS_EMULATOR_VERSION in versions.env by `scripts/set_release.py`, and
+# `test_the_target_wheel_matches_the_pinned_release` fails if they ever drift.
+databricks-target = { url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.4/databricks_target-0.1.0-py3-none-any.whl" }
+# Still a path: contoso-data-product publishes no release yet, so there is
+# nothing to point at. Until it does, this repository needs that sibling
+# checked out beside it.
 contoso-data-product = { path = "../contoso-data-product" }
 
 [tool.ruff]
