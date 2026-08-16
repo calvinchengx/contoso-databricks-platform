@@ -308,14 +308,14 @@ wheels = [
 [[package]]
 name = "contoso-data-product"
 version = "0.1.0"
-source = { directory = "../contoso-data-product" }
+source = { url = "https://github.com/calvinchengx/contoso-data-product/releases/download/v0.1.0/contoso_data_product-0.1.0-py3-none-any.whl" }
+wheels = [
+    { url = "https://github.com/calvinchengx/contoso-data-product/releases/download/v0.1.0/contoso_data_product-0.1.0-py3-none-any.whl", hash = "sha256:6e305dd2c933d9ea397314c76ec3faaffbe4e79681d728871ebf0c3113885068" },
+]
 
 [package.metadata]
 requires-dist = [{ name = "requests", marker = "extra == 'compare'", specifier = ">=2.32" }]
 provides-extras = ["compare"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.0.3,<10" }]
 
 [[package]]
 name = "contoso-databricks-platform"
@@ -343,7 +343,7 @@ engine = [
 
 [package.metadata]
 requires-dist = [
-    { name = "contoso-data-product", directory = "../contoso-data-product" },
+    { name = "contoso-data-product", url = "https://github.com/calvinchengx/contoso-data-product/releases/download/v0.1.0/contoso_data_product-0.1.0-py3-none-any.whl" },
     { name = "databricks-target", url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.4/databricks_target-0.1.0-py3-none-any.whl" },
     { name = "pyarrow", specifier = ">=18,<24" },
     { name = "requests", specifier = ">=2.32,<3" },

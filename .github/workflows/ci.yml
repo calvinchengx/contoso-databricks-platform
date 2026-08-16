@@ -1,15 +1,15 @@
 # The repository's own gate: does it hold together, on all three platforms?
 #
-# ONE path dep remains, `../contoso-data-product`, because that package
-# publishes no release to install from. actions/checkout refuses `path: ../…`
-# (outside the workspace), so this job checks the consumer out *next to* that
-# sibling under GITHUB_WORKSPACE, the same layout a local clone in emulators/
-# has.
+# NO SIBLING CHECKOUTS, and that is the assertion. Both `databricks-target` and
+# `contoso-data-product` install from the wheels their releases publish, so this
+# job clones one repository and nothing else. If either dependency reached for a
+# source tree again, `uv sync` here would fail with `Distribution not found` —
+# which is what makes "a consumer builds against a published release" a checked
+# claim rather than a sentence in the README.
 #
-# databricks-emulator is deliberately NOT checked out. `databricks-target` now
-# installs from the wheel its release publishes, and the absence of that
-# checkout is what proves it: if anything still reached for the source tree,
-# `uv sync` here would fail.
+# It used to check out two more, and the layout comment explaining why is worth
+# remembering rather than deleting: a path dep is invisible until someone tries
+# to clone the repository on its own.
 name: CI
 
 on:
@@ -35,10 +35,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           path: contoso-databricks-platform
-      - uses: actions/checkout@v7
-        with:
-          repository: calvinchengx/contoso-data-product
-          path: contoso-data-product
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
           version: "0.12.3"

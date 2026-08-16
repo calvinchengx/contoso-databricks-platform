@@ -103,6 +103,29 @@ def test_the_target_wheel_matches_the_pinned_release():
     )
 
 
+def test_no_dependency_comes_from_a_sibling_checkout():
+    """This repository must clone and build on its own.
+
+    Both `databricks-target` and `contoso-data-product` install from wheels
+    their releases publish. A `path = "../…"` source is invisible to everyone
+    who already has the siblings on disk, and fails for everyone who does not,
+    which is the whole population this repository claims to serve.
+
+    CI asserts the same thing by checking out one repository and nothing else.
+    This test is the fast version, and it names the rule.
+    """
+    proj = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    offenders = [
+        line.strip()
+        for line in proj.splitlines()
+        if "path = " in line and "../" in line and not line.lstrip().startswith("#")
+    ]
+    assert not offenders, (
+        "a dependency resolves from a sibling checkout, so a lone clone cannot "
+        "build: " + str(offenders)
+    )
+
+
 def test_set_release_moves_only_the_emulator_pin(tmp_path, monkeypatch):
     import importlib.util
 
