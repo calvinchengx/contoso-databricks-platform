@@ -30,6 +30,9 @@ def main() -> int:
     env = os.environ.copy()
     env.setdefault("DELTA_DATA", str(Path("/tmp/contoso-dbx-delta")))
     Path(env["DELTA_DATA"]).mkdir(parents=True, exist_ok=True)
+    env.setdefault("DATABRICKS_DATA", str(ROOT / "data"))
+    Path(env["DATABRICKS_DATA"]).mkdir(parents=True, exist_ok=True)
+    os.chmod(env["DATABRICKS_DATA"], 0o777)
     return subprocess.call(cmd, cwd=ROOT, env=env)
 
 
