@@ -27,10 +27,20 @@ def main() -> int:
     dbt_host = host.replace("https://", "").replace("http://", "")
     path = wh.http_path
     uri = f"{host}{path}"
-    (work / "macros" / "databricks_create_schema.sql").write_text(
+    (work / "macros" / "databricks_adapter_stubs.sql").write_text(
         "{% macro databricks__create_schema(relation) -%}\n"
         "  {# Provision owns UC schemas. Unity Catalog OSS returns 400 when the schema exists. #}\n"
-        "{%- endmacro %}\n",
+        "{%- endmacro %}\n"
+        "\n"
+        "{%- macro get_create_row_filter_clause(relation) -%}\n"
+        "{%- endmacro -%}\n"
+        "\n"
+        "{%- macro drop_row_filter_if_exists(relation) -%}\n"
+        "{%- endmacro -%}\n"
+        "\n"
+        "{%- macro fetch_row_filters(relation) -%}\n"
+        "  {{ return(none) }}\n"
+        "{%- endmacro -%}\n",
         encoding="utf-8",
     )
     env = os.environ.copy()
