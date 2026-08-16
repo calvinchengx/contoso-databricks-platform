@@ -11,11 +11,11 @@ from target import landing_path, tables_path
 
 DAY = "2026-07-15"
 
-WEB_CUSTOMER_DDL = "email STRING, country STRING"
-WEB_PRODUCT_DDL = "product_id STRING, name STRING"
+WEB_CUSTOMER_DDL = "array<struct<email:STRING,country:STRING>>"
+WEB_PRODUCT_DDL = "array<struct<product_id:STRING,name:STRING>>"
 WEB_ORDER_DDL = (
-    "web_order_id STRING, email STRING, placed_at STRING, status STRING, "
-    "lines ARRAY<STRUCT<line_no:STRING,product_id:STRING,quantity:STRING,unit_price:STRING>>"
+    "array<struct<web_order_id:STRING,email:STRING,placed_at:STRING,status:STRING,"
+    "lines:array<struct<line_no:STRING,product_id:STRING,quantity:STRING,unit_price:STRING>>>>"
 )
 
 
