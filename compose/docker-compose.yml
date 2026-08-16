@@ -1,0 +1,95 @@
+# Databricks workspace + Sail + UC. Consumer-owned, pins from versions.env.
+# Family compose does not attach Spark; this file does.
+# entra + keyvault are the same secret door Contoso uses; the emulator
+# binary does not require them (PAT is native) but AKV-backed scopes do.
+services:
+  entra:
+    profiles: [identity]
+    image: ghcr.io/calvinchengx/entra-emulator:${ENTRA_EMULATOR_VERSION:?see versions.env}
+    ports:
+      - "18473:8443"
+
+  keyvault:
+    profiles: [identity]
+    image: ghcr.io/calvinchengx/azure-keyvault-emulator:${KEYVAULT_EMULATOR_VERSION:?see versions.env}
+    ports:
+      - "18474:8444"
+    environment:
+      KV_ENTRA_ISSUER: "https://entra:8443/6f89cf12-978b-4d23-ac18-9ef0c127cf87/v2.0"
+
+  uc:
+    image: unitycatalog/unitycatalog:${UC_VERSION:?see versions.env}
+    ports:
+      - "18471:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/2.1/unity-catalog/catalogs"]
+      interval: 5s
+      timeout: 3s
+      retries: 36
+      start_period: 20s
+
+  sail:
+    image: ghcr.io/calvinchengx/fabric-emulator-sail:${SAIL_VERSION:?see versions.env}
+    depends_on:
+      uc:
+        condition: service_healthy
+    ports:
+      - "15070:50051"
+    volumes:
+      - ${DELTA_DATA:-/tmp/contoso-dbx-delta}:/data/delta
+    environment:
+      SAIL_SPARK__SESSION_TIMEOUT_SECS: "3600"
+      RUST_LOG: "info"
+      UNITY_ALLOW_HTTP_URL: "true"
+      SAIL_CATALOG__DEFAULT_CATALOG: sail
+      SAIL_CATALOG__LIST: '[{name="sail", type="memory", initial_database=["default"]}, {type="unity", name="contoso", uri="http://uc:8080/api/2.1/unity-catalog", default_catalog="contoso"}]'
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 50051), 2).close()"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+
+  spark-agent:
+    image: ghcr.io/calvinchengx/fabric-emulator-spark-agent:${SPARK_AGENT_VERSION:?see versions.env}
+    depends_on:
+      sail:
+        condition: service_healthy
+    ports:
+      - "18170:8099"
+    volumes:
+      - ${DELTA_DATA:-/tmp/contoso-dbx-delta}:/data/delta
+    environment:
+      SPARK_REMOTE: "sc://sail:50051"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8099/health', timeout=3)"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  databricks:
+    image: ghcr.io/calvinchengx/databricks-emulator:${DATABRICKS_EMULATOR_VERSION:?see versions.env}
+    depends_on:
+      spark-agent:
+        condition: service_healthy
+      uc:
+        condition: service_healthy
+    ports:
+      - "18470:8447"
+    volumes:
+      - dbx-data:/data
+      - ${DELTA_DATA:-/tmp/contoso-dbx-delta}:/data/delta
+    environment:
+      DATABRICKS_DISABLE_TLS: "1"
+      DATABRICKS_DATA_DIR: /data
+      DATABRICKS_PUBLIC_URL: http://127.0.0.1:18470
+      DATABRICKS_SPARK_CONNECT_URL: http://spark-agent:8099
+      DATABRICKS_SPARK_CONNECT_GRPC_URL: http://sail:50051
+      DATABRICKS_UC_URL: http://uc:8080
+    healthcheck:
+      test: ["CMD", "databricks-emulator", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  dbx-data:

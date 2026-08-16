@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Repo tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          version: "0.12.3"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Checkout sibling product (path dep)
+        uses: actions/checkout@v7
+        with:
+          repository: calvinchengx/contoso-data-product
+          path: ../contoso-data-product
+      - name: Checkout databricks-target
+        uses: actions/checkout@v7
+        with:
+          repository: calvinchengx/databricks-emulator
+          path: ../databricks-emulator
+      - run: uv sync --frozen --group dev
+      - run: uv run --frozen --group dev python -m pytest tests -q
+      - run: make help

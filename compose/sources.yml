@@ -1,0 +1,18 @@
+# One vendor on its own mokapi instance. ERP Postgres is pinned so a later
+# CDC step can attach it without inventing a version the day it lands.
+services:
+  mokapi-pos:
+    profiles: [sources]
+    image: mokapi/mokapi:${MOKAPI_VERSION:?see versions.env}
+    ports:
+      - "18190:80"
+
+  erp-postgres:
+    profiles: [sources]
+    image: postgres:${POSTGRES_VERSION:?see versions.env}
+    ports:
+      - "55433:5432"
+    environment:
+      POSTGRES_PASSWORD: contoso
+      POSTGRES_USER: contoso
+      POSTGRES_DB: contoso
