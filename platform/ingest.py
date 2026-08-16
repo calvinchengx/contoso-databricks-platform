@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import datetime as dt
+
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -123,7 +125,9 @@ def _reference(root: Path) -> None:
         pa.table(
             {
                 "currency": ["USD", "GBP"],
-                "rate_date": ["2026-07-15", "2026-07-15"],
+                "rate_date": pa.array(
+                    [dt.date(2026, 7, 15), dt.date(2026, 7, 15)], type=pa.date32()
+                ),
                 "rate_to_usd": [1.0, 1.27],
             }
         ),
