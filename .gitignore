@@ -13,3 +13,6 @@ gold/target/
 gold/logs/
 .pytest_cache/
 data/
+
+# Local tooling
+.nwave/
