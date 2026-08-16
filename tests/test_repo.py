@@ -68,3 +68,20 @@ def test_product_is_imported_not_restated():
     assert "from contoso_product import run_bronze" in bronze
     assert "from contoso_product import run_silver" in silver
     assert "decimal(19,4)" not in silver
+
+
+def test_set_release_moves_only_the_emulator_pin(tmp_path, monkeypatch):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "set_release", ROOT / "scripts" / "set_release.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    text = (ROOT / "versions.env").read_text(encoding="utf-8")
+    new, moved = mod.set_version(text, "0.2.0")
+    assert "DATABRICKS_EMULATOR_VERSION" in moved
+    assert "DATABRICKS_EMULATOR_VERSION=0.2.0" in new
+    assert "SAIL_VERSION=" in new
+    sail = [ln for ln in text.splitlines() if ln.startswith("SAIL_VERSION=")][0]
+    assert sail in new

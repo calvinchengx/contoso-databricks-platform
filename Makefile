@@ -7,12 +7,13 @@ endif
 
 UV ?= uv
 
-.PHONY: help doctor up down verify test lint
+.PHONY: help doctor up down config verify test lint
 
 help:
 	@echo "  doctor   Check prerequisites"
 	@echo "  up       Start databricks-emulator + Sail + UC + OpenMetadata"
 	@echo "  down     Stop the stack"
+	@echo "  config   Show the resolved compose config (proves the pin)"
 	@echo "  verify   Provision, ingest, bronze, silver, gold, govern"
 	@echo "  test     Repo-boundary tests (no Docker)"
 
@@ -24,6 +25,9 @@ up:
 
 down:
 	$(UV) run --frozen --group dev python scripts/compose.py down -v
+
+config:
+	$(UV) run --frozen --group dev python scripts/compose.py config
 
 verify:
 	$(UV) run --frozen --group engine python platform/provision.py
