@@ -28,7 +28,45 @@ def T():
     os.environ.setdefault("DATABRICKS_UC_URL", "http://127.0.0.1:18471")
     os.environ.setdefault("DATABRICKS_WAREHOUSE", WAREHOUSE)
     os.environ.setdefault("OM_URL", "http://127.0.0.1:18585/api/v1")
+    if not os.environ.get("DATABRICKS_TOKEN"):
+        tok = _emulator_pat()
+        if tok:
+            os.environ["DATABRICKS_TOKEN"] = tok
     return databricks_target.target()
+
+
+def _emulator_pat() -> str:
+    """Seeded PAT. The published image writes it 0600 as nonroot; read via compose if needed."""
+    pat = ROOT / "data" / "admin.pat"
+    try:
+        return pat.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
+    import subprocess
+
+    cmd = [
+        "docker",
+        "compose",
+        "--env-file",
+        "versions.env",
+        "--profile",
+        "governance",
+        "-f",
+        "compose/docker-compose.yml",
+        "-f",
+        "compose/sources.yml",
+        "-f",
+        "compose/governance.yml",
+        "exec",
+        "-T",
+        "databricks",
+        "cat",
+        "/data/admin.pat",
+    ]
+    try:
+        return subprocess.check_output(cmd, cwd=ROOT).decode().strip()
+    except Exception:
+        return ""
 
 
 def landing_path() -> str:
