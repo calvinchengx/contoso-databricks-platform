@@ -36,6 +36,7 @@ def main() -> int:
             "DATABRICKS_CATALOG": CATALOG,
             "CONTOSO_SILVER_DATABASE": CATALOG,
             "CONTOSO_SILVER_SCHEMA": "silver",
+            "LAKEHOUSE_ID": CATALOG,
             "DBT_PROFILES_DIR": str(work.resolve()),
             "DBT_SEND_ANONYMOUS_USAGE_STATS": "false",
         }
