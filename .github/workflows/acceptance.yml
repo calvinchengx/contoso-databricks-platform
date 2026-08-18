@@ -32,6 +32,16 @@ jobs:
         with:
           repository: calvinchengx/databricks-emulator
           path: databricks-emulator
+      # The vendors this stack pulls from are DECLARED in contoso-sources and
+      # materialised from it, so both doctor.py and compose.py hard-require the
+      # checkout beside this one -- `ROOT.parent / "contoso-sources"`, which is
+      # the workspace root here. It is not optional and it is not a fixture we
+      # could vendor: the point of reading the declaration is that this
+      # platform's vendor list is not a copy.
+      - uses: actions/checkout@v7
+        with:
+          repository: calvinchengx/contoso-sources
+          path: contoso-sources
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
           version: "0.12.3"
@@ -57,6 +67,12 @@ jobs:
             "${{ github.event.client_payload.version }}"
           uv lock
           git --no-pager diff --stat versions.env pyproject.toml uv.lock
+      # The BYTES, not just the declaration. compose.py refuses without them:
+      # mokapi serves the exports from _data/, and an unmaterialised checkout
+      # stands up vendors that answer nothing.
+      - name: Materialise the vendor exports
+        run: make sources
+        working-directory: contoso-sources
       - run: make doctor
       - run: make config
       - run: make up
