@@ -18,10 +18,17 @@ from target import CATALOG, T, WAREHOUSE
 # `DESCRIBE` all still say `decimal(19,4)`. The numbers are right; their type
 # is not. Remove an entry when its issue closes -- a cause that outlives its
 # defect is a worse lie than no cause at all.
-KNOWN_CAUSES = {
-    "money_is_never_stored_as_float": "databricks-emulator#46",
-    "revenue_summary_loses_no_revenue": "databricks-emulator#46",
-}
+# NO KNOWN CAUSES. This mapped both money contracts to databricks-emulator#46,
+# which was true for as long as this platform ran 0.2.4: decimal columns were
+# registered in Unity Catalog with column metadata that could not express them,
+# so they read as float and the type contract failed. 0.2.5 registers no column
+# metadata, the Delta log is the schema again, and both contracts pass — so the
+# cause is gone and naming it would be a worse lie than naming none.
+#
+# Repopulate it if this platform ever runs with a defect it is knowingly living
+# with. A cause is only worth carrying while it is true, and the entry should
+# die in the same change that makes it false, which is this one.
+KNOWN_CAUSES: dict[str, str] = {}
 
 
 def _query(w, warehouse_id: str, statement: str) -> list:
