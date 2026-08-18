@@ -252,3 +252,45 @@ def test_vendor_host_ports_do_not_collide_with_the_fabric_platform():
     ours = {ns["HOST_BASE"] + i for i in range(3)} | {
         ns["ERP_DB_HOST_PORT"], ns["ERP_BROKER_HOST_PORT"], ns["ERP_CONNECT_HOST_PORT"]}
     assert not (ours & fabric), f"host ports collide with fabric-platform-notebook-pipelines: {ours & fabric}"
+
+
+def test_gold_records_the_measurement_and_still_fails():
+    """A failing contract must not erase the numbers, or hide behind them.
+
+    Recording a measurement and asserting a pass are two things. This step used
+    to do both at once: a failing contract stopped the snapshot being written,
+    so the failure took the evidence with it — and this runtime's gold is
+    correct, its aggregates identical to Fabric's, with the two failing
+    contracts failing on an emulator defect rather than a product one. Refusing
+    to publish removed the cell from the comparison the family exists to make.
+
+    Both halves are load-bearing, so both are checked: the snapshot is written
+    BEFORE the exit, and the exit still happens.
+    """
+    gold = (ROOT / "platform" / "gold.py").read_text(encoding="utf-8")
+    write = gold.index('Path("product_snapshot.json").write_text')
+    raise_after = gold.index("gold's numbers were recorded, and this run FAILED")
+    assert write < raise_after, (
+        "the snapshot must be written before the run fails, or a failing "
+        "contract erases the evidence along with the pass"
+    )
+    assert "contract_failures" in gold, (
+        "the failures must travel with the numbers; a snapshot recorded "
+        "without them is the stale-snapshot failure again"
+    )
+
+
+def test_contract_results_come_from_the_test_invocation():
+    """dbt overwrites run_results.json, and `dbt run` shares the target dir.
+
+    Read without checking which command wrote it, the file reports a `dbt run`:
+    nine model rows, zero failures. Believed, that publishes a snapshot
+    asserting NO contract failures on a run where two failed — the precise
+    false green this design exists to prevent. Measured, not hypothesised: it
+    is what the artefact said when inspected after a later `dbt run`.
+    """
+    gold = (ROOT / "platform" / "gold.py").read_text(encoding="utf-8")
+    assert 'which != "test"' in gold, (
+        "gold.py must refuse a run_results.json written by anything other than "
+        "`dbt test` before reporting contract results from it"
+    )

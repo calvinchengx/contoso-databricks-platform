@@ -11,6 +11,18 @@ from pathlib import Path
 from contoso_product import gold_dir
 from target import CATALOG, T, WAREHOUSE
 
+# Contract failures this platform can already explain, by contract name. Both
+# of these are one emulator defect: decimal columns are registered in Unity
+# Catalog with `type_name: DOUBLE`, so every money column in gold is READ as a
+# binary float even though the Delta log, the Parquet physical type and
+# `DESCRIBE` all still say `decimal(19,4)`. The numbers are right; their type
+# is not. Remove an entry when its issue closes -- a cause that outlives its
+# defect is a worse lie than no cause at all.
+KNOWN_CAUSES = {
+    "money_is_never_stored_as_float": "databricks-emulator#46",
+    "revenue_summary_loses_no_revenue": "databricks-emulator#46",
+}
+
 
 def _query(w, warehouse_id: str, statement: str) -> list:
     """Run one statement and return its rows, whatever shape they arrive in.
@@ -44,6 +56,71 @@ def _query(w, warehouse_id: str, statement: str) -> list:
     if "text" in result:
         return json.loads(result["text"]).get("data") or []
     return []
+
+
+def _run_contracts(work: Path, env: dict) -> list[dict]:
+    """Run the ODCS contracts and return what failed, in dbt's own words.
+
+    THE CONTRACTS, ACTUALLY RUN. This step once invoked `dbt run` alone and then
+    published a snapshot listing five contracts by GLOBBING THEIR FILENAMES off
+    disk -- so the snapshot named five guarantees this runtime had never once
+    evaluated, and `compare_products` compared that list against a runtime where
+    they had genuinely passed. Two runtimes "agreeing on contracts" while only
+    one ran them is worse than not comparing at all.
+    """
+    rc = subprocess.call(
+        ["dbt", "test", "--project-dir", str(work), "--profiles-dir", str(work)],
+        env=env,
+    )
+    results = work / "target" / "run_results.json"
+    if not results.exists():
+        raise SystemExit(
+            f"dbt test exited {rc} but wrote no {results} -- refusing to guess "
+            f"whether the contracts passed."
+        )
+    payload = json.loads(results.read_text(encoding="utf-8"))
+
+    # ASSERT WHICH INVOCATION WROTE THIS. dbt overwrites run_results.json on
+    # every invocation and `dbt run` shares this target directory, so the file
+    # is only the contracts' verdict if the last command was `dbt test`. Reading
+    # it without checking is not theoretical: inspecting it after a later `dbt
+    # run` returned `which: "run"`, nine model rows and zero failures -- which,
+    # believed, publishes a snapshot asserting NO contract failures on a run
+    # where two failed. That is the precise false green this whole design exists
+    # to prevent, so it fails loudly instead.
+    which = (payload.get("args") or {}).get("which")
+    if which != "test":
+        raise SystemExit(
+            f"{results} was written by `dbt {which}`, not `dbt test` -- refusing "
+            f"to report contract results from another command's artefact."
+        )
+
+    failures = []
+    for r in payload.get("results", []):
+        if r.get("status") in ("pass", "success"):
+            continue
+        # dbt names a singular test `test.<project>.<name>.<hash>`; the snapshot
+        # names contracts bare, as `contracts` already does, so the two join.
+        unique_id = r.get("unique_id", "")
+        name = unique_id.split(".")[2] if unique_id.count(".") >= 2 else unique_id
+        failures.append({
+            "contract": name,
+            "status": r.get("status"),
+            "failures": r.get("failures"),
+            "detail": (r.get("message") or "").strip()[:200],
+            # OPTIONAL, and supplied by the PLATFORM. A platform knows which of
+            # its own emulator's defects it is living with; the product should
+            # not have to. A failure with no cause reads as unexplained, which
+            # is a worse state and should look like one.
+            **({"cause": KNOWN_CAUSES[name]} if name in KNOWN_CAUSES else {}),
+        })
+    if rc != 0 and not failures:
+        raise SystemExit(
+            f"dbt test exited {rc} but run_results names no failing test -- "
+            f"something failed that this cannot describe, so it is not "
+            f"publishing a snapshot that implies otherwise."
+        )
+    return failures
 
 
 def main() -> int:
@@ -88,12 +165,24 @@ def main() -> int:
     # "agreeing on contracts" while only one ran them is worse than not
     # comparing at all.
     #
-    # A failure here stops the snapshot being written, which is the point: a
-    # gold table that breaks its own contract is not a result to publish.
-    subprocess.check_call(
-        ["dbt", "test", "--project-dir", str(work), "--profiles-dir", str(work)],
-        env=env,
-    )
+    # RECORDING A MEASUREMENT AND ASSERTING A PASS ARE TWO THINGS, and this used
+    # to do both in one act: a failing contract stopped the snapshot being
+    # written, so the failure erased the evidence along with the pass.
+    #
+    # That is right in general and wrong here. This runtime's gold is CORRECT --
+    # its aggregates are identical to the Fabric runtime's to the last decimal
+    # place -- and the two contracts that fail do so because of an emulator
+    # defect (databricks-emulator#46), not a product one. Refusing to publish
+    # took the cell out of the cross-runtime comparison the family exists to
+    # make, for a reason belonging to neither the product nor this platform.
+    #
+    # So the run still FAILS -- see the exit at the end, nothing is softened --
+    # but the numbers are written down first, carrying the failures with them.
+    # Evidence is worth recording even when the run that produced it failed;
+    # what must never happen is evidence recorded without the failure attached,
+    # which is exactly the stale snapshot this platform once published, silently
+    # outliving its own fix.
+    contract_failures = _run_contracts(work, env)
     w = t.workspace_client()
     # READ MONEY AT MONEY'S OWN GRAIN, and cast in the ENGINE rather than
     # rounding in Python.
@@ -147,8 +236,21 @@ def main() -> int:
         "runtime": "databricks",
         "catalog": CATALOG,
     }
+    # ABSENT WHEN CLEAN, rather than an empty list on every green snapshot. An
+    # always-present `[]` makes "this runtime evaluated its contracts and they
+    # passed" indistinguishable from "this runtime never checked", which is the
+    # distinction the field exists to carry.
+    if contract_failures:
+        snapshot["contract_failures"] = contract_failures
     Path("product_snapshot.json").write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
     print(f"gold snapshot {snapshot}")
+    if contract_failures:
+        named = ", ".join(f["contract"] for f in contract_failures)
+        raise SystemExit(
+            f"gold's numbers were recorded, and this run FAILED: {named}. "
+            f"The snapshot carries the failures; `make verify` is red and "
+            f"should be."
+        )
     return 0
 
 
