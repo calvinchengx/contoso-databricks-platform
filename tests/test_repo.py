@@ -355,3 +355,38 @@ def test_the_acceptance_run_adopts_every_file_the_bump_touches():
         "the dispatch must refresh the lockfile after set_release.py, or the "
         "run verifies the new image against the client the lock still names"
     )
+
+
+def test_acceptance_checks_out_every_repository_the_stack_reads():
+    """doctor.py and compose.py hard-require a contoso-sources checkout.
+
+    `sources_dir()` resolves `ROOT.parent / "contoso-sources"` unless SOURCES
+    overrides it, and both scripts exit rather than guess. The acceptance job
+    checked out three repositories and not that one, so `make doctor` failed at
+    the first step with "missing the vendor declaration" -- an emulator release
+    could not be verified at all, for a reason that had nothing to do with the
+    emulator.
+
+    Measured: run 32193426410, the first acceptance run after the vendor
+    declaration became load-bearing, died 12 seconds in.
+
+    The declaration alone is not enough either. compose.py checks for the
+    materialised bytes under _data/ and says so ("Run `make sources` in ...
+    first"), because mokapi serves the exports from that directory; an
+    unmaterialised checkout stands up vendors that answer nothing.
+    """
+    wf = (ROOT / ".github" / "workflows" / "acceptance.yml").read_text(encoding="utf-8")
+    assert "repository: calvinchengx/contoso-sources" in wf, (
+        "acceptance must check out contoso-sources beside this repository, or "
+        "doctor.py exits before the emulator is ever started"
+    )
+    assert "make sources" in wf, (
+        "checking out contoso-sources is half of it -- without `make sources` "
+        "the exports under _data/ do not exist and compose.py refuses"
+    )
+    materialise = wf.index("make sources")
+    for target in ("make doctor", "make up", "make verify"):
+        assert materialise < wf.index(target), (
+            f"`make sources` must run before `{target}`; the vendors have to "
+            f"exist before anything reads them"
+        )
