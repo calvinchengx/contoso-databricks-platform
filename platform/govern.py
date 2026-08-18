@@ -32,7 +32,16 @@ def login() -> None:
 
 def put(path: str, body: dict) -> dict:
     r = S.put(f"{OM}/{path}", json=body, timeout=60)
-    r.raise_for_status()
+    # RAISE WITH THE CATALOG'S OWN WORDS. `raise_for_status()` alone reports
+    # "400 Client Error: Bad Request for url: .../domains" and throws the body
+    # away -- and the body is the entire diagnosis: OpenMetadata answers
+    # `[query param domainType must not be null]`, which names the field. One
+    # missing field cost a round of guessing that reading the response would
+    # have ended immediately.
+    if r.status_code >= 400:
+        raise SystemExit(
+            f"OpenMetadata refused PUT /{path}: {r.status_code} {r.text[:400]}"
+        )
     return r.json() if r.content else {}
 
 
@@ -43,6 +52,21 @@ def main() -> int:
         {
             "name": DOMAIN,
             "displayName": "Contoso Commerce",
+            # REQUIRED, and its absence only shows on a FRESH catalog. OpenMetadata
+            # answers `[query param domainType must not be null]` with a 400, but
+            # a PUT over a domain that already exists does not need it -- so this
+            # step passed for as long as the catalog outlived a run and failed the
+            # first time the stack came down with its volumes. A field that is
+            # only mandatory on first use is one a re-run will not catch.
+            #
+            # `Consumer-aligned` matches what fabric-platform-notebook-pipelines
+            # already publishes for its domain, and matching matters more here
+            # than the taxonomy does: this is a HUMAN catalog, and the same
+            # product described two ways by two runtimes is exactly the
+            # disagreement it exists to remove. Accepted values are Aggregate,
+            # Consumer-aligned and Source-aligned -- verified against this
+            # OpenMetadata, which 400s anything else as "Invalid request format".
+            "domainType": "Consumer-aligned",
             "description": "One product, two runtimes (Fabric and Databricks).",
         },
     )
@@ -56,7 +80,20 @@ def main() -> int:
                     "type": "Databricks",
                     "hostPort": os.environ.get("DATABRICKS_HOST", "http://localhost:18470"),
                     "httpPath": "/sql/1.0/endpoints/wh-1",
-                    "token": "not-stored",
+                    # WRAPPED IN `authType`, not a bare `token`. OpenMetadata
+                    # encrypts a service's connection when it stores it, and a
+                    # field it does not recognise fails that encryption rather
+                    # than being ignored: "Failed to encrypt 'Databricks'
+                    # connection stored in DB due to an unrecognized field:
+                    # 'token'". Verified against this catalog -- the wrapper is
+                    # accepted, the bare field is not.
+                    #
+                    # NOT A REAL CREDENTIAL. This platform publishes the SHAPE
+                    # of the connection to the human catalog; the token that
+                    # actually reaches the warehouse comes from the secret
+                    # scope, and nothing here should be usable if the catalog
+                    # leaks.
+                    "authType": {"token": "not-stored"},
                 }
             },
         },
