@@ -12,6 +12,40 @@ from contoso_product import gold_dir
 from target import CATALOG, T, WAREHOUSE
 
 
+def _query(w, warehouse_id: str, statement: str) -> list:
+    """Run one statement and return its rows, whatever shape they arrive in.
+
+    NOT `statement_execution.execute_statement`. That returns a typed
+    `ResultData`, and the SDK's model carries `data_array` and no `text` --
+    so when this warehouse answers with `result.text` (the payload as a nested
+    JSON string) the SDK drops it on the floor and every read looks like an
+    empty table. Measured: the statement reported SUCCEEDED, `data_array` was
+    None, and the star held four rows summing to 37 the whole time.
+
+    `api_client.do` is the same transport and the same auth, minus the model
+    that discards the field. Both shapes are then accepted rather than one
+    being declared correct: real Databricks returns `data_array`, and a fix
+    that only understood the emulator would break against the thing this
+    platform exists to rehearse.
+    """
+    payload = w.api_client.do(
+        "POST",
+        "/api/2.0/sql/statements",
+        body={"warehouse_id": warehouse_id, "statement": statement,
+              "wait_timeout": "30s"},
+    )
+    state = (payload.get("status") or {}).get("state")
+    if state != "SUCCEEDED":
+        message = ((payload.get("status") or {}).get("error") or {}).get("message", "")
+        raise SystemExit(f"statement did not succeed ({state}): {message[:200]}")
+    result = payload.get("result") or {}
+    if "data_array" in result:
+        return result["data_array"] or []
+    if "text" in result:
+        return json.loads(result["text"]).get("data") or []
+    return []
+
+
 def main() -> int:
     t = T()
     wh = t.warehouse(WAREHOUSE)
@@ -47,20 +81,27 @@ def main() -> int:
         env=env,
     )
     w = t.workspace_client()
-    stmt = w.statement_execution.execute_statement(
-        warehouse_id=wh.id,
-        statement=(
-            f"SELECT coalesce(sum(revenue_usd),0), coalesce(sum(cancelled_revenue_usd),0), "
-            f"coalesce(sum(sale_lines),0) FROM {CATALOG}.gold.fct_revenue_summary"
-        ),
+    data = _query(
+        w,
+        wh.id,
+        f"SELECT coalesce(sum(revenue_usd),0), coalesce(sum(cancelled_revenue_usd),0), "
+        f"coalesce(sum(sale_lines),0) FROM {CATALOG}.gold.fct_revenue_summary",
     )
-    data = []
-    if stmt.result and getattr(stmt.result, "data_array", None):
-        data = stmt.result.data_array
+    if not data:
+        # "COULD NOT READ" IS NOT "ZERO", and defaulting to 0 here published a
+        # snapshot claiming this runtime built nothing while dbt had just
+        # reported nine models built. compare_products then refused it as an
+        # empty runtime -- the right call on the evidence, and the wrong
+        # diagnosis. Measured: the star held 4 rows and revenue 37 the whole
+        # time; the read was blind, not the warehouse.
+        raise SystemExit(
+            "gold built, but its aggregates came back with no rows -- refusing "
+            "to publish a snapshot of zeros."
+        )
     snapshot = {
-        "revenue_usd": str(data[0][0]) if data else "0",
-        "cancelled_revenue_usd": str(data[0][1]) if data else "0",
-        "sale_lines": str(data[0][2]) if data else "0",
+        "revenue_usd": str(data[0][0]),
+        "cancelled_revenue_usd": str(data[0][1]),
+        "sale_lines": str(data[0][2]),
         "contracts": sorted(
             p.stem for p in (product / "tests").glob("*.sql")
         ),
