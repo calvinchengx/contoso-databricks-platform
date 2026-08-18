@@ -5,11 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import landing
 from contoso_product import run_bronze
 from spark_session import connect
 from target import landing_path, tables_path
-
-DAY = "2026-07-15"
 
 WEB_CUSTOMER_DDL = "array<struct<email:STRING,country:STRING>>"
 WEB_PRODUCT_DDL = "array<struct<product_id:STRING,name:STRING>>"
@@ -20,12 +19,17 @@ WEB_ORDER_DDL = (
 
 
 def main() -> int:
+    # THE DAY THE INGEST STEPS DECIDED, not one computed here. Reading the
+    # partition bronze happens to be run on would silently read an empty
+    # directory whenever a run crosses midnight -- and an empty landing is not
+    # an error to Spark, it is zero rows.
+    day = landing.day()
     spark = connect()
     metrics = run_bronze(
         spark,
         landing=landing_path(),
         tables=tables_path(),
-        day=DAY,
+        day=day,
         web_customer_ddl=WEB_CUSTOMER_DDL,
         web_product_ddl=WEB_PRODUCT_DDL,
         web_order_ddl=WEB_ORDER_DDL,

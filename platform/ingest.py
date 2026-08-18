@@ -1,169 +1,51 @@
-"""Land sample bytes for every vendor the product bronze reads.
+"""Land every vendor the product bronze reads.
 
-When the published fixture wheels are installed, a later step can replace
-these with the real export. The sample is enough to prove the sibling
-attaches the product without restating transform logic.
+FOUR VENDORS, FOUR TRANSPORTS, and this file runs them in order rather than
+doing any of the work: paged delimited text and JSON Lines over HTTP, paged
+JSON arrays over HTTP, binary Parquet over HTTP, and a Postgres change stream
+carried by Kafka. Each step is its own module because each vendor is its own
+failure -- a wrong key, a mangled binary body, a short change stream -- and a
+single function would report all of them as "ingest failed".
+
+WHAT THIS REPLACED. This file used to WRITE the data it then claimed to have
+ingested: a handful of literal rows, three customers, two orders. That made
+every downstream number this platform published true about a fixture it had
+invented, and made comparing its gold against fabric-platform-notebook-pipelines's
+meaningless -- the two runtimes were not building the same product, they were
+building different data through similar code. Both now pull from the vendors
+contoso-sources declares, so a disagreement in gold is a disagreement about the
+ENGINE, which is the only thing worth measuring here.
 """
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+import ingest_erp_cdc
+import ingest_pos
+import ingest_reference
+import ingest_web
+import landing
 
-import datetime as dt
-
-import pyarrow as pa
-import pyarrow.parquet as pq
-
-from target import host_delta, landing_path
-
-DAY = "2026-07-15"
-
-
-def _pos(root: Path) -> None:
-    dest = root / "contoso_pos" / DAY
-    (dest / "customers").mkdir(parents=True, exist_ok=True)
-    (dest / "customers" / "part-0001.csv").write_text(
-        "customer_id,name,email,country,marketing_segment,loyalty_tier\n"
-        "1,Alice,alice@example.com,USA,premium,gold\n"
-        "2,Bob,,GB,mainstream,silver\n"
-        "3,Cara,cara@example.com,United Kingdom,new,bronze\n",
-        encoding="utf-8",
-    )
-    (dest / "orders").mkdir(exist_ok=True)
-    rows = [
-        {
-            "order_id": "o1",
-            "customer_id": "1",
-            "product_id": "sku-1",
-            "event_seq": 1,
-            "order_date": "2026-07-15",
-            "channel": "store",
-            "status": "shipped",
-            "currency": "USD",
-            "quantity": 2,
-            "unit_price": 10.0,
-        },
-        {
-            "order_id": "o2",
-            "customer_id": "2",
-            "product_id": "sku-2",
-            "event_seq": 1,
-            "order_date": "2026-07-15",
-            "channel": "store",
-            "status": "shipped",
-            "currency": "USD",
-            "quantity": 1,
-            "unit_price": 5.0,
-        },
-    ]
-    (dest / "orders" / "part-0001.json").write_text(
-        "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8"
-    )
-
-
-def _web(root: Path) -> None:
-    dest = root / "contoso_web" / DAY
-    dest.mkdir(parents=True, exist_ok=True)
-    (dest / "customers").mkdir(exist_ok=True)
-    (dest / "customers" / "page.json").write_text(
-        json.dumps(
-            [
-                {"email": "alice@example.com", "country": "United States"},
-                {"email": "dana@example.com", "country": "SG"},
-            ]
-        ),
-        encoding="utf-8",
-    )
-    (dest / "products").mkdir(exist_ok=True)
-    (dest / "products" / "page.json").write_text(
-        json.dumps([{"product_id": "sku-1", "name": "Mouse"}]),
-        encoding="utf-8",
-    )
-    (dest / "orders").mkdir(exist_ok=True)
-    (dest / "orders" / "page.json").write_text(
-        json.dumps(
-            [
-                {
-                    "web_order_id": "w1",
-                    "email": "alice@example.com",
-                    "placed_at": "2026-07-15T12:00:00Z",
-                    "status": "paid",
-                    "lines": [
-                        {
-                            "line_no": 1,
-                            "product_id": "sku-1",
-                            "quantity": "1",
-                            "unit_price": "12.00",
-                        }
-                    ],
-                },
-                {
-                    "web_order_id": "w2",
-                    "email": "dana@example.com",
-                    "placed_at": "2026-06-30T23:30:00-07:00",
-                    "status": "cancelled",
-                    "lines": [
-                        {
-                            "line_no": 1,
-                            "product_id": "sku-99",
-                            "quantity": "1",
-                            "unit_price": "3.00",
-                        }
-                    ],
-                },
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-
-def _reference(root: Path) -> None:
-    dest = root / "contoso_reference" / DAY
-    dest.mkdir(parents=True, exist_ok=True)
-    pq.write_table(
-        pa.table(
-            {
-                "currency": ["USD", "GBP"],
-                "rate_date": pa.array(
-                    [dt.date(2026, 7, 15), dt.date(2026, 7, 15)], type=pa.date32()
-                ),
-                "rate_to_usd": [1.0, 1.27],
-            }
-        ),
-        dest / "fx_rates.parquet",
-    )
-    pq.write_table(
-        pa.table(
-            {
-                "product_id": ["sku-1", "sku-2"],
-                "product_name": ["Mouse", "Pad"],
-                "category": ["Peripherals", "Peripherals"],
-                "department": ["Accessories", "Accessories"],
-                "segment": ["Peripheral", "Peripheral"],
-                "list_price_usd": [12.0, 5.0],
-            }
-        ),
-        dest / "product_hierarchy.parquet",
-    )
-
-
-def _erp(root: Path) -> None:
-    dest = root / "contoso_erp" / DAY
-    dest.mkdir(parents=True, exist_ok=True)
-    pq.write_table(
-        pa.table({"change_id": [1], "entity": ["order"], "op": ["c"]}),
-        dest / "changes.parquet",
-    )
+# ORDER MATTERS ONLY FOR THE DATE. The first step to land decides the partition
+# and writes it to state.json; the rest read that decision, and bronze reads it
+# too. Nothing else here is sequential -- the vendors do not know about each
+# other, which is the entire reason party resolution downstream is hard.
+STEPS = [
+    ("Contoso POS", ingest_pos),
+    ("Contoso Web", ingest_web),
+    ("Contoso Reference", ingest_reference),
+    ("Contoso ERP", ingest_erp_cdc),
+]
 
 
 def main() -> int:
-    root = host_delta() / "landing"
-    _pos(root)
-    _web(root)
-    _reference(root)
-    _erp(root)
-    print(f"landed sample vendors under {root} (engine {landing_path()})")
+    day = landing.day()
+    print(f"landing date partition: {day}")
+    for name, step in STEPS:
+        print(f"--- {name} ---")
+        rc = step.main()
+        if rc != 0:
+            return rc
+    print(f"all four vendors landed — date partition {day}")
     return 0
 
 

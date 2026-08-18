@@ -44,7 +44,27 @@ exists to keep that true.
 | **Why** | Grants and three-part names belong to UC. Glossary, contracts, and the dual-runtime product entity belong to OM. |
 | **Enforced by** | judgement |
 
-## 3. Real-target switch
+## 3. The vendors are not this platform's
+
+| | |
+|---|---|
+| **Rule** | Source data is **pulled from the vendors `contoso-sources` declares**, over their own transports and against their own credentials. No ingest step may author the bytes it lands. |
+| **Why** | This platform used to write its own fixture — three customers, two orders — and every number it published downstream was then true about data it had invented. It looked identical to a real run: green pipeline, populated star, a gold snapshot with numbers in it. The defect was visible only by comparing against the Fabric runtime, which is exactly the comparison the invented fixture destroyed. Same declaration, same fixtures, same pinned simulator is what makes "two engines, one product" a claim rather than a slogan. |
+| **Enforced by** | `test_ingest_pulls_from_vendors_rather_than_writing_fixtures`, `test_the_vendor_stack_is_generated_from_the_sources_declaration` |
+
+| | |
+|---|---|
+| **Rule** | A vendor that cannot prove it is serving its fixture is not usable. Every ingest step sends a deliberately wrong key first and stops unless the vendor answers `401`. |
+| **Why** | Without its fixture mokapi does not fail — it generates bodies from the OpenAPI schema and answers everything `200`, wrong key included. A liveness probe passes happily against that, and the lie surfaces much later as a row count that is merely plausible. |
+| **Enforced by** | the assertion at the top of each `ingest_*.py`; `make doctor` and `scripts/compose.py` refuse to start without `_data` |
+
+| | |
+|---|---|
+| **Rule** | A step that reports a failure must exit non-zero. |
+| **Why** | `register.py` printed `FAILED` eight times, returned 0, and let gold build against an empty catalog. The word was in the log and the pipeline was green. |
+| **Enforced by** | `register.py` raises; judgement elsewhere |
+
+## 4. Real-target switch
 
 ```
 DATABRICKS_TARGET=real

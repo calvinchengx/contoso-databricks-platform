@@ -16,3 +16,6 @@ data/
 
 # Local tooling
 .nwave/
+
+# Generated from contoso-sources at `make up` -- never edited, never committed.
+compose/.generated/

@@ -141,3 +141,114 @@ def test_set_release_moves_only_the_emulator_pin(tmp_path, monkeypatch):
     assert "SAIL_VERSION=" in new
     sail = [ln for ln in text.splitlines() if ln.startswith("SAIL_VERSION=")][0]
     assert sail in new
+
+
+def test_ingest_pulls_from_vendors_rather_than_writing_fixtures():
+    """No ingest step may author the data it claims to have ingested.
+
+    This platform used to write a handful of literal rows here -- three
+    customers, two orders -- and every number it published downstream was then
+    true about a fixture it had invented. Worse, it looked identical to a real
+    run: green pipeline, populated star, a gold snapshot with numbers in it.
+    The defect was only visible by comparing against the Fabric runtime, which
+    is precisely the comparison the invented fixture made meaningless.
+
+    So the rule is structural: an ingest step fetches, it does not compose. A
+    literal row written to the landing directory is the failure this catches.
+    """
+    import re
+
+    root = ROOT / "platform"
+    offenders = []
+    for p in sorted(root.glob("ingest*.py")):
+        text = p.read_text(encoding="utf-8")
+        # A docstring may describe the old behaviour; code may not perform it.
+        body = re.sub(r'"""(?:.|\n)*?"""', "", text)
+        for marker in ("customer_id,name,email", "write_text("):
+            if marker in body:
+                offenders.append(f"{p.name}: {marker}")
+    assert not offenders, (
+        "an ingest step is composing bytes rather than fetching them: "
+        + str(offenders)
+    )
+
+
+def test_no_vendor_credential_is_written_in_this_repository():
+    """Keys come from the vendor or the environment, never from the tree.
+
+    `seed_secrets.py` used to carry `string_value="pos-dev-key"` -- a
+    credential in the source tree, and the WRONG one: the vendor issues
+    `pos-key-8843-dev`, so anything reading that scope entry would have been
+    refused 401 by the very vendor it was seeded for. Both halves of that are
+    worth failing on.
+    """
+    suspicious = []
+    for p in sorted((ROOT / "platform").glob("*.py")):
+        text = p.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            if "string_value=" in line and '"' in line.split("string_value=", 1)[1]:
+                suspicious.append(f"{p.name}: {line.strip()}")
+    assert not suspicious, (
+        "a literal credential is being written into the secret scope: "
+        + str(suspicious)
+    )
+
+
+def test_the_vendor_stack_is_generated_from_the_sources_declaration():
+    """The vendors are contoso-sources', not this repository's.
+
+    Two platforms' gold numbers are comparable only if the bytes were
+    identical, and identical bytes means the same declaration, the same
+    fixtures and the same pinned simulator. A vendor block hand-written here
+    would be this platform's own data wearing the family's name.
+    """
+    assert not (ROOT / "compose" / "sources.yml").exists(), (
+        "compose/sources.yml is back — vendors belong to contoso-sources, and "
+        "a local copy is how the two runtimes quietly stop comparing"
+    )
+    compose = (ROOT / "scripts" / "compose.py").read_text(encoding="utf-8")
+    assert "sources.yaml" in compose and "_data" in compose, (
+        "compose.py must generate the vendor fragment from the sources "
+        "declaration, and must refuse to start when the fixtures are absent"
+    )
+
+
+def test_the_generator_refuses_a_vendor_kind_it_cannot_run(tmp_path):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "vendor_sources", ROOT / "scripts" / "sources.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    decl = {"vendors": [{"name": "nope", "kind": "telepathy"}]}
+    try:
+        mod.fragment(decl, str(tmp_path), {"MOKAPI_VERSION": "0.50.0"})
+    except SystemExit as exc:
+        assert "telepathy" in str(exc)
+    else:  # pragma: no cover - the assertion IS the test
+        raise AssertionError("an unknown vendor kind was quietly accepted")
+
+
+def test_vendor_host_ports_do_not_collide_with_the_fabric_platform():
+    """Both stacks run on one developer machine, often at the same time.
+
+    A collision does not report itself as a collision: compose fails to bind
+    and the message names a port, not the two platforms fighting over it. The
+    Fabric platform owns 180xx / 19092 / 55432; this one owns 181xx / 19094 /
+    55434.
+    """
+    text = (ROOT / "scripts" / "sources.py").read_text(encoding="utf-8")
+    ns: dict = {}
+    for line in text.splitlines():
+        if line.startswith(("HOST_BASE", "ERP_DB_HOST_PORT", "ERP_BROKER_HOST_PORT",
+                            "ERP_CONNECT_HOST_PORT")):
+            k, v = line.split("=", 1)
+            ns[k.strip()] = int(v.split("#")[0].strip())
+    fabric = {18090, 18091, 18092, 18081, 18082, 18084, 18083, 19092, 55432}
+    ours = {ns["HOST_BASE"] + i for i in range(3)} | {
+        ns["ERP_DB_HOST_PORT"], ns["ERP_BROKER_HOST_PORT"], ns["ERP_CONNECT_HOST_PORT"]}
+    assert not (ours & fabric), f"host ports collide with fabric-platform-notebook-pipelines: {ours & fabric}"

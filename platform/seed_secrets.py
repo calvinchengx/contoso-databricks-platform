@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from credentials import VENDOR_OF, published
 from target import T
 
 
@@ -11,8 +12,14 @@ def main() -> int:
         print("seed_secrets skipped — DATABRICKS_TARGET=real uses the customer's scope")
         return 0
     w = t.workspace_client()
-    w.secrets.put_secret(scope=t.secret_scope, key="contoso-pos-api-key", string_value="pos-dev-key")
-    print(f"seeded {t.secret_scope}/contoso-pos-api-key")
+    for secret in sorted(VENDOR_OF):
+        # THE VENDOR'S ACTUAL KEY, read from the vendor. This used to be a
+        # literal `"pos-dev-key"` here, which was both a credential in the
+        # source tree and the WRONG value -- the vendor issues
+        # `pos-key-8843-dev`, so anything reading the scope would have been
+        # refused 401 by the very vendor this seeded a key for.
+        w.secrets.put_secret(scope=t.secret_scope, key=secret, string_value=published(secret))
+        print(f"seeded {t.secret_scope}/{secret}")
     return 0
 
 

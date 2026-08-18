@@ -56,8 +56,6 @@ def _emulator_pat() -> str:
         "-f",
         "compose/docker-compose.yml",
         "-f",
-        "compose/sources.yml",
-        "-f",
         "compose/governance.yml",
         "cp",
         "databricks:/data/admin.pat",

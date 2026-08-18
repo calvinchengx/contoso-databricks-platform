@@ -80,11 +80,43 @@ def main() -> int:
         ["dbt", "run", "--project-dir", str(work), "--profiles-dir", str(work)],
         env=env,
     )
+    # THE CONTRACTS, ACTUALLY RUN. This step used to invoke `dbt run` alone and
+    # then publish a snapshot listing five ODCS contracts by GLOBBING THEIR
+    # FILENAMES off disk -- so the snapshot named five guarantees this runtime
+    # had never once evaluated, and `compare_products` compared that list of
+    # names against a runtime where they had genuinely passed. Two runtimes
+    # "agreeing on contracts" while only one ran them is worse than not
+    # comparing at all.
+    #
+    # A failure here stops the snapshot being written, which is the point: a
+    # gold table that breaks its own contract is not a result to publish.
+    subprocess.check_call(
+        ["dbt", "test", "--project-dir", str(work), "--profiles-dir", str(work)],
+        env=env,
+    )
     w = t.workspace_client()
+    # READ MONEY AT MONEY'S OWN GRAIN, and cast in the ENGINE rather than
+    # rounding in Python.
+    #
+    # This engine returns `double` for `sum()` over a `decimal(19,4)` column --
+    # measured: `typeof(sum(amount_usd))` on fct_sales answers `double`, while
+    # every input column, silver through fct_sales, is decimal. Real Spark
+    # widens decimal(19,4) to decimal(29,4); Sail widens it to binary floating
+    # point. So the star's aggregate columns land as `double` and the total
+    # arrives as 129341157.67000002 -- the right number carrying ~2e-8 of
+    # float error, against the Fabric runtime's exact 129341157.6700.
+    #
+    # The cast recovers the value because money is defined to four decimal
+    # places and the error is eight orders of magnitude below that. It does NOT
+    # repair the column, and is not meant to: the demotion is an engine defect
+    # worth reporting upstream, and this line only stops a serialisation
+    # artefact from being mistaken for two runtimes disagreeing about revenue.
+    # Cast to STRING in SQL as well, so the exact digits survive a JSON number.
+    money = "CAST(CAST(coalesce(sum({}),0) AS DECIMAL(19,4)) AS STRING)"
     data = _query(
         w,
         wh.id,
-        f"SELECT coalesce(sum(revenue_usd),0), coalesce(sum(cancelled_revenue_usd),0), "
+        f"SELECT {money.format('revenue_usd')}, {money.format('cancelled_revenue_usd')}, "
         f"coalesce(sum(sale_lines),0) FROM {CATALOG}.gold.fct_revenue_summary",
     )
     if not data:

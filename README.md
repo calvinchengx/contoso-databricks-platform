@@ -1,6 +1,6 @@
 # Contoso Databricks Platform
 
-[![CI](https://github.com/calvinchengx/contoso-databricks-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/calvinchengx/contoso-databricks-platform/actions/workflows/ci.yml)
+[![CI](https://github.com/calvinchengx/databricks-platform-jobs/actions/workflows/ci.yml/badge.svg)](https://github.com/calvinchengx/databricks-platform-jobs/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 A Databricks analytics platform built on
@@ -11,7 +11,7 @@ end to end: landing, bronze, silver in Spark, gold in dbt, catalogued in Unity
 Catalog and OpenMetadata.
 
 Its sibling is
-[contoso-fabric-platform](https://github.com/calvinchengx/contoso-fabric-platform),
+[fabric-platform-notebook-pipelines](https://github.com/calvinchengx/fabric-platform-notebook-pipelines),
 which runs **the same data product** on Microsoft Fabric. That pairing is the
 point of both repositories: a data engineer writes bronze/silver Spark and gold
 dbt SQL once, and the platform it lands on is a wrapper, not a rewrite.
@@ -30,10 +30,18 @@ checkouts, and its CI checks out one repository and nothing else. That absence i
 the proof: reach for a source tree again and `uv sync` fails there.
 
 ```sh
-git clone https://github.com/calvinchengx/contoso-databricks-platform
-cd contoso-databricks-platform
+# The vendors this platform pulls from. NOT a dependency of this repository --
+# they are the world outside it, mounted into containers as bytes rather than
+# imported as code, and they are the same vendors fabric-platform-notebook-pipelines
+# pulls from, which is the only reason the two runtimes' numbers can be
+# compared at all.
+git clone https://github.com/calvinchengx/contoso-sources
+make -C contoso-sources sources
+
+git clone https://github.com/calvinchengx/databricks-platform-jobs
+cd databricks-platform-jobs
 make doctor     # what is ready, and what is not
-make up         # start the stack
+make up         # start the stack, vendors included
 make verify     # run the platform end to end
 ```
 
@@ -45,7 +53,7 @@ Eight steps, in order, each a real call against the emulator:
 |---|---|
 | `provision` | create the named warehouse, UC catalog and schemas |
 | `seed_secrets` | put the source credentials in the secret scope |
-| `ingest` | land the vendor bytes |
+| `ingest` | pull four vendors over their own transports and land the bytes verbatim |
 | `bronze` | landing to bronze Delta, **the product's** `run_bronze` |
 | `silver` | bronze to silver, **the product's** `run_silver` |
 | `register` | silver Delta paths as UC **EXTERNAL** tables |
@@ -61,19 +69,49 @@ and three-part names (`contoso.silver.*`, `contoso.gold.*`) belong to it.
 OpenMetadata is the *human* catalog: glossary, ODCS contracts and the
 dual-runtime product entity belong there. Neither is a copy of the other.
 
+## The vendors
+
+Four source systems, four transports, and none of them is Databricks:
+
+| vendor | transport | what makes it awkward |
+|---|---|---|
+| Contoso POS | paged CSV + JSON Lines over HTTP | 95 MB export, paged; the parts are landed as parts |
+| Contoso Web | paged JSON arrays over HTTP | orders arrive **nested**, and accounts are keyed on email — no customer id |
+| Contoso Reference | binary Parquet over HTTP | corrupts *quietly*, so the ingest verifies the vendor's published sha256 |
+| Contoso ERP | Postgres → Debezium → Kafka | a **change stream**, not a table read |
+
+They are declared by [contoso-sources](https://github.com/calvinchengx/contoso-sources),
+not here. `scripts/sources.py` reads that declaration and emits a compose
+fragment, so adding a vendor there stands one up here — and both this platform
+and fabric-platform-notebook-pipelines pull the *same bytes from the same pinned
+simulator*. That is load-bearing: gold agreeing across two engines means
+something only if the inputs were identical, and a vendor block hand-written in
+this repository would make this platform's data its own.
+
+**The failure this guards against is silent.** Without `make sources` in that
+repository, mokapi does not fail — it generates bodies from the OpenAPI schema
+and answers every request `200`, wrong API key included. The pipeline would go
+green over invented data. `make doctor` refuses to start, `scripts/compose.py`
+refuses to compose, and every ingest step sends a deliberately wrong key first
+and stops unless the vendor answers `401`.
+
 ## The stack
 
-`make up` starts **8 services**: the emulator, Sail as the Spark engine, a
-Spark agent, the Unity Catalog OSS sidecar, and OpenMetadata with its own
-Postgres, OpenSearch and a one-shot migration.
+`make up` starts **14 services**: the emulator, Sail as the Spark engine, a
+Spark agent, the Unity Catalog OSS sidecar, OpenMetadata with its own Postgres,
+OpenSearch and a one-shot migration — and the six that are the vendors (three
+mokapi instances, a Postgres, Redpanda, and Debezium with its seeder).
 
-Two more profiles exist and are off by default, because `make verify` does not
-need either: `identity` adds
+One more profile exists and is off by default, because `make verify` does not
+need it: `identity` adds
 [entra-emulator](https://github.com/calvinchengx/entra-emulator) and
 [azure-keyvault-emulator](https://github.com/calvinchengx/azure-keyvault-emulator)
-for the AKV-backed secret scope, and `sources` adds a mokapi vendor API and a
-Postgres ERP. `ingest` lands sample bytes itself, so a first run needs nothing
-outside the default set.
+for the AKV-backed secret scope.
+
+Host ports are `181xx`, `19094` and `55434`, chosen clear of
+fabric-platform-notebook-pipelines's `180xx` / `19092` / `55432` so both stacks can run at
+once. `test_vendor_host_ports_do_not_collide_with_the_fabric_platform` holds
+that line.
 
 ## Emulator or real Databricks, one setting
 
@@ -128,9 +166,9 @@ Apache-2.0.
 ## Related projects
 
 The same Contoso data, on three engines:
-[`contoso-fabric-platform`](https://github.com/calvinchengx/contoso-fabric-platform),
+[`fabric-platform-notebook-pipelines`](https://github.com/calvinchengx/fabric-platform-notebook-pipelines),
 this repo, and
-[`contoso-snowflake-platform`](https://github.com/calvinchengx/contoso-snowflake-platform).
+[`snowflake-platform-tasks`](https://github.com/calvinchengx/snowflake-platform-tasks).
 The transforms they share live in
 [`contoso-data-product`](https://github.com/calvinchengx/contoso-data-product).
 

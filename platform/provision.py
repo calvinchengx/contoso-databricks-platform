@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import landing
 from target import CATALOG, T, WAREHOUSE, WORKSPACE
 
 
@@ -40,7 +41,13 @@ def main() -> int:
         if "already" not in str(exc).lower():
             print(f"secret scope: {exc}")
 
-    state = {
+    # MERGED, NOT REPLACED. This used to overwrite state.json wholesale, which
+    # was harmless only because provision happens to run first: any later
+    # re-provision would drop `landing_day`, bronze would compute a fresh date,
+    # and it would read an empty landing directory -- which is not an error to
+    # Spark, it is zero rows.
+    state = landing._state()
+    state.update({
         "workspace": WORKSPACE,
         "warehouse": WAREHOUSE,
         "warehouse_id": wh.id,
@@ -48,7 +55,7 @@ def main() -> int:
         "catalog": CATALOG,
         "target": t.name,
         "host": t.host,
-    }
+    })
     Path("state.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
     print(f"provisioned warehouse {WAREHOUSE} id={wh.id} catalog={CATALOG}")
     return 0

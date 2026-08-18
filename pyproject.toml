@@ -8,6 +8,15 @@ dependencies = [
     "contoso-data-product",
     "requests>=2.32,<3",
     "pyarrow>=18,<24",
+    # THE ERP VENDOR IS A CHANGE STREAM, so a Kafka client is the only way to
+    # consume it. The alternative -- reading erp.customer directly -- would be
+    # a snapshot, and a snapshot cannot say that a customer was in Germany
+    # before they were in France, which is the entire reason this vendor exists.
+    "confluent-kafka>=2.5,<3",
+    # Not to ingest with: the CDC step reconciles the stream's net effect
+    # against the ERP's own row count, because a connector that stopped early
+    # produces a stream that is stable, well-formed, and short.
+    "psycopg[binary]>=3.2,<4",
 ]
 
 [dependency-groups]
@@ -41,7 +50,7 @@ databricks-target = { url = "https://github.com/calvinchengx/databricks-emulator
 # reads a sibling's source tree is not consuming anything anyone else can get.
 # With both dependencies coming from releases, this repository finally clones
 # and builds on its own.
-contoso-data-product = { url = "https://github.com/calvinchengx/contoso-data-product/releases/download/v0.1.0/contoso_data_product-0.1.0-py3-none-any.whl" }
+contoso-data-product = { url = "https://github.com/calvinchengx/contoso-data-product/releases/download/v0.1.1/contoso_data_product-0.1.1-py3-none-any.whl" }
 
 [tool.ruff]
 line-length = 88

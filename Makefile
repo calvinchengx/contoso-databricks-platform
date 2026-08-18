@@ -29,7 +29,7 @@ down:
 config:
 	$(UV) run --frozen --group dev python scripts/compose.py config
 
-verify:
+verify: doctor
 	$(UV) run --frozen --group engine python platform/provision.py
 	$(UV) run --frozen --group engine python platform/seed_secrets.py
 	$(UV) run --frozen --group engine python platform/ingest.py
