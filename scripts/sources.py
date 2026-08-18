@@ -86,30 +86,53 @@ def fragment(decl: dict, sources_dir: str, pins: dict) -> dict:
                             f"/sources/{v['spec']}", f"/sources/{v['script']}"],
                 # Go does not read the cgroup limit; without GOMEMLIMIT the heap
                 # climbs past mem_limit and the container dies mid-response.
-                "environment": {"GOMEMLIMIT": "2GiB"},
-                "mem_limit": "4g",
+                # SIZED TO THIS VENDOR, from the declaration. These were
+                # hardcoded 2GiB/4g for every vendor, which gave the 4 KB
+                # reference feed the same budget as the 95 MB POS export --
+                # wasteful rather than wrong, but it also meant contoso-sources
+                # could state a vendor's budget and this platform would ignore
+                # it. The Fabric platform reads them; so does this one now.
+                "environment": {"GOMEMLIMIT": v.get("memory", "1GiB")},
+                "mem_limit": v.get("mem_limit", "2g"),
+                # A SEATBELT, added after this platform lost a vendor silently.
+                # mokapi was OOM-killed serving the POS orders export (exit 137,
+                # OOMKilled=true) and, with no restart policy, simply stayed
+                # dead. Nothing noticed for 33 minutes, until the next ingest
+                # met `Connection refused` on a vendor that had been up when the
+                # run started.
+                #
+                # This is NOT the fix for the OOM itself -- GOMEMLIMIT above is
+                # -- and a vendor that dies repeatedly should be investigated
+                # rather than restarted forever. It is here so that a death is
+                # survivable and visible, instead of a stack that looks up while
+                # one service is gone.
+                "restart": "unless-stopped",
                 "volumes": [f"{sources_dir}:/sources:ro"],
                 "ports": [f"{host_port}:{v['port']}"],
-                # LIVENESS ONLY, and that is a deliberate limit rather than
-                # an oversight. The declaration names a port, not a route, so
-                # this generator cannot know which path enforces a credential
-                # -- and the check worth having is exactly that one: if
-                # serve.js cannot read its fixture, mokapi does not fail, it
+                # HEALTHY MEANS THE VENDOR ENFORCES ITS CREDENTIAL, not that
+                # a port is open. Without its fixture mokapi does not fail: it
                 # GENERATES bodies from the OpenAPI schema and answers every
                 # request 200, wrong key included. A probe against `/` cannot
-                # tell those apart, and one that returned "healthy" for a
-                # vendor serving invented data would be worse than none.
+                # tell those apart, and one reporting "healthy" for a vendor
+                # serving invented data is worse than none.
                 #
-                # So the credential is asserted where a route IS known: every
-                # ingest step sends a deliberately wrong key first and refuses
-                # to continue unless the vendor answers 401. That is the same
-                # witness fabric-platform-notebook-pipelines uses, moved from compose to
-                # the step that has the information to do it properly.
+                # The route comes from the declaration, because which path
+                # enforces a credential is a fact about the vendor's API. wget
+                # exits non-zero on 401, which is the healthy case here -- hence
+                # the inverted test.
                 "healthcheck": {
+                    "test": ["CMD-SHELL",
+                             f"wget -q -O /dev/null "
+                             f"--header='X-Api-Key: definitely-not-the-key' "
+                             f"http://localhost:{v['port']}{v['health']} "
+                             f"&& exit 1 || exit 0"],
+                    "interval": "10s", "timeout": "5s", "retries": 5,
+                } if v.get("health") else {
                     "test": ["CMD-SHELL",
                              f"wget -q -O /dev/null http://localhost:{v['port']}/ "
                              f"|| test $? -ne 4"],
-                    "interval": "10s", "timeout": "5s", "retries": 5},
+                    "interval": "10s", "timeout": "5s", "retries": 5,
+                },
             }
         elif kind == "cdc":
             # THREE SERVICES, because a change stream needs all three and any
