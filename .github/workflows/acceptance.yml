@@ -18,12 +18,12 @@ jobs:
     timeout-minutes: 45
     defaults:
       run:
-        working-directory: contoso-databricks-platform
+        working-directory: databricks-platform-jobs
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          path: contoso-databricks-platform
+          path: databricks-platform-jobs
       - uses: actions/checkout@v7
         with:
           repository: calvinchengx/contoso-data-product

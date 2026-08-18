@@ -1,5 +1,5 @@
 [project]
-name = "contoso-databricks-platform"
+name = "databricks-platform-jobs"
 version = "0.1.0"
 description = "Contoso data product consumer for databricks-emulator / real Databricks"
 requires-python = ">=3.12"

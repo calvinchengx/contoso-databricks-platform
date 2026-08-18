@@ -2,16 +2,16 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
-    "python_full_version >= '3.14' and extra != 'group-27-contoso-databricks-platform-dbt' and extra == 'group-27-contoso-databricks-platform-engine'",
-    "python_full_version < '3.14' and extra != 'group-27-contoso-databricks-platform-dbt' and extra == 'group-27-contoso-databricks-platform-engine'",
-    "python_full_version >= '3.14' and extra == 'group-27-contoso-databricks-platform-dbt' and extra != 'group-27-contoso-databricks-platform-engine'",
-    "python_full_version == '3.13.*' and extra == 'group-27-contoso-databricks-platform-dbt' and extra != 'group-27-contoso-databricks-platform-engine'",
-    "python_full_version < '3.13' and extra == 'group-27-contoso-databricks-platform-dbt' and extra != 'group-27-contoso-databricks-platform-engine'",
-    "extra != 'group-27-contoso-databricks-platform-dbt' and extra != 'group-27-contoso-databricks-platform-engine'",
+    "python_full_version >= '3.14' and extra != 'group-24-databricks-platform-jobs-dbt' and extra == 'group-24-databricks-platform-jobs-engine'",
+    "python_full_version < '3.14' and extra != 'group-24-databricks-platform-jobs-dbt' and extra == 'group-24-databricks-platform-jobs-engine'",
+    "python_full_version >= '3.14' and extra == 'group-24-databricks-platform-jobs-dbt' and extra != 'group-24-databricks-platform-jobs-engine'",
+    "python_full_version == '3.13.*' and extra == 'group-24-databricks-platform-jobs-dbt' and extra != 'group-24-databricks-platform-jobs-engine'",
+    "python_full_version < '3.13' and extra == 'group-24-databricks-platform-jobs-dbt' and extra != 'group-24-databricks-platform-jobs-engine'",
+    "extra != 'group-24-databricks-platform-jobs-dbt' and extra != 'group-24-databricks-platform-jobs-engine'",
 ]
 conflicts = [[
-    { package = "contoso-databricks-platform", group = "dbt" },
-    { package = "contoso-databricks-platform", group = "engine" },
+    { package = "databricks-platform-jobs", group = "dbt" },
+    { package = "databricks-platform-jobs", group = "engine" },
 ]]
 
 [[package]]
@@ -318,49 +318,6 @@ requires-dist = [{ name = "requests", marker = "extra == 'compare'", specifier =
 provides-extras = ["compare"]
 
 [[package]]
-name = "contoso-databricks-platform"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "contoso-data-product" },
-    { name = "databricks-target" },
-    { name = "pyarrow" },
-    { name = "requests" },
-]
-
-[package.dev-dependencies]
-dbt = [
-    { name = "dbt-databricks" },
-]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
-engine = [
-    { name = "databricks-connect" },
-    { name = "databricks-sdk", version = "0.129.0", source = { registry = "https://pypi.org/simple" } },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "contoso-data-product", url = "https://github.com/calvinchengx/contoso-data-product/releases/download/v0.1.0/contoso_data_product-0.1.0-py3-none-any.whl" },
-    { name = "databricks-target", url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.4/databricks_target-0.1.0-py3-none-any.whl" },
-    { name = "pyarrow", specifier = ">=18,<24" },
-    { name = "requests", specifier = ">=2.32,<3" },
-]
-
-[package.metadata.requires-dev]
-dbt = [{ name = "dbt-databricks", specifier = "==1.12.4" }]
-dev = [
-    { name = "pytest", specifier = ">=9.0.3,<10" },
-    { name = "ruff", specifier = ">=0.14,<0.15" },
-]
-engine = [
-    { name = "databricks-connect", specifier = "==19.1" },
-    { name = "databricks-sdk", specifier = "==0.129.0" },
-]
-
-[[package]]
 name = "cryptography"
 version = "50.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -439,6 +396,49 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/1d/479aaafa876bf73c0269062176958493ee098dd5b17fd8ad65ac2903e413/databricks_connect-19.1-py2.py3-none-any.whl", hash = "sha256:3c7c12c2e3916ecb0fcb0b5a5d069c2bfc5945c2dc10c72d579c44520bd36eec", size = 3092139, upload-time = "2026-08-14T21:01:11.787Z" },
+]
+
+[[package]]
+name = "databricks-platform-jobs"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "contoso-data-product" },
+    { name = "databricks-target" },
+    { name = "pyarrow" },
+    { name = "requests" },
+]
+
+[package.dev-dependencies]
+dbt = [
+    { name = "dbt-databricks" },
+]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+engine = [
+    { name = "databricks-connect" },
+    { name = "databricks-sdk", version = "0.129.0", source = { registry = "https://pypi.org/simple" } },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "contoso-data-product", url = "https://github.com/calvinchengx/contoso-data-product/releases/download/v0.1.0/contoso_data_product-0.1.0-py3-none-any.whl" },
+    { name = "databricks-target", url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.4/databricks_target-0.1.0-py3-none-any.whl" },
+    { name = "pyarrow", specifier = ">=18,<24" },
+    { name = "requests", specifier = ">=2.32,<3" },
+]
+
+[package.metadata.requires-dev]
+dbt = [{ name = "dbt-databricks", specifier = "==1.12.4" }]
+dev = [
+    { name = "pytest", specifier = ">=9.0.3,<10" },
+    { name = "ruff", specifier = ">=0.14,<0.15" },
+]
+engine = [
+    { name = "databricks-connect", specifier = "==19.1" },
+    { name = "databricks-sdk", specifier = "==0.129.0" },
 ]
 
 [[package]]
@@ -526,7 +526,7 @@ dependencies = [
     { name = "agate" },
     { name = "dbt-common" },
     { name = "dbt-protos" },
-    { name = "mashumaro", extra = ["msgpack"], marker = "extra == 'group-27-contoso-databricks-platform-dbt'" },
+    { name = "mashumaro", extra = ["msgpack"], marker = "extra == 'group-24-databricks-platform-jobs-dbt'" },
     { name = "protobuf" },
     { name = "pytz" },
     { name = "typing-extensions" },
@@ -548,7 +548,7 @@ dependencies = [
     { name = "isodate" },
     { name = "jinja2" },
     { name = "jsonschema" },
-    { name = "mashumaro", extra = ["msgpack"], marker = "extra == 'group-27-contoso-databricks-platform-dbt'" },
+    { name = "mashumaro", extra = ["msgpack"], marker = "extra == 'group-24-databricks-platform-jobs-dbt'" },
     { name = "pathspec" },
     { name = "protobuf" },
     { name = "python-dateutil" },
@@ -575,7 +575,7 @@ dependencies = [
     { name = "dbt-protos" },
     { name = "jinja2" },
     { name = "jsonschema" },
-    { name = "mashumaro", extra = ["msgpack"], marker = "extra == 'group-27-contoso-databricks-platform-dbt'" },
+    { name = "mashumaro", extra = ["msgpack"], marker = "extra == 'group-24-databricks-platform-jobs-dbt'" },
     { name = "metricflow" },
     { name = "networkx" },
     { name = "packaging", version = "25.0", source = { registry = "https://pypi.org/simple" } },
@@ -608,7 +608,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "databricks-sdk", version = "0.117.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "databricks-sql-connector", extra = ["pyarrow"], marker = "extra == 'group-27-contoso-databricks-platform-dbt'" },
+    { name = "databricks-sql-connector", extra = ["pyarrow"], marker = "extra == 'group-24-databricks-platform-jobs-dbt'" },
     { name = "dbt-adapters" },
     { name = "dbt-common" },
     { name = "dbt-core" },
@@ -1194,9 +1194,9 @@ name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.14' and extra != 'group-27-contoso-databricks-platform-dbt' and extra == 'group-27-contoso-databricks-platform-engine'",
-    "python_full_version < '3.14' and extra != 'group-27-contoso-databricks-platform-dbt' and extra == 'group-27-contoso-databricks-platform-engine'",
-    "extra != 'group-27-contoso-databricks-platform-dbt' and extra != 'group-27-contoso-databricks-platform-engine'",
+    "python_full_version >= '3.14' and extra != 'group-24-databricks-platform-jobs-dbt' and extra == 'group-24-databricks-platform-jobs-engine'",
+    "python_full_version < '3.14' and extra != 'group-24-databricks-platform-jobs-dbt' and extra == 'group-24-databricks-platform-jobs-engine'",
+    "extra != 'group-24-databricks-platform-jobs-dbt' and extra != 'group-24-databricks-platform-jobs-engine'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7d/fa/3944b40b07da9ce895c0e6303a5ab7d53da063554f534556b134a54d6093/packaging-26.3.tar.gz", hash = "sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79", size = 313412, upload-time = "2026-08-04T18:15:28.737Z" }
 wheels = [
@@ -1492,10 +1492,10 @@ name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'group-27-contoso-databricks-platform-dbt' and extra == 'group-27-contoso-databricks-platform-engine')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'group-24-databricks-platform-jobs-dbt' and extra == 'group-24-databricks-platform-jobs-engine')" },
     { name = "iniconfig" },
-    { name = "packaging", version = "25.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-27-contoso-databricks-platform-dbt'" },
-    { name = "packaging", version = "26.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-27-contoso-databricks-platform-engine' or extra != 'group-27-contoso-databricks-platform-dbt'" },
+    { name = "packaging", version = "25.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-24-databricks-platform-jobs-dbt'" },
+    { name = "packaging", version = "26.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-24-databricks-platform-jobs-engine' or extra != 'group-24-databricks-platform-jobs-dbt'" },
     { name = "pluggy" },
     { name = "pygments" },
 ]
