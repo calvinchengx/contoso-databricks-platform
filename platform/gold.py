@@ -98,18 +98,25 @@ def main() -> int:
     # READ MONEY AT MONEY'S OWN GRAIN, and cast in the ENGINE rather than
     # rounding in Python.
     #
-    # This engine returns `double` for `sum()` over a `decimal(19,4)` column --
-    # measured: `typeof(sum(amount_usd))` on fct_sales answers `double`, while
-    # every input column, silver through fct_sales, is decimal. Real Spark
-    # widens decimal(19,4) to decimal(29,4); Sail widens it to binary floating
-    # point. So the star's aggregate columns land as `double` and the total
-    # arrives as 129341157.67000002 -- the right number carrying ~2e-8 of
-    # float error, against the Fabric runtime's exact 129341157.6700.
+    # Money columns in this catalog are READ as binary floats, so the total
+    # arrives as 129341157.67000002 -- the right number carrying ~2e-8 of float
+    # error, against the Fabric runtime's exact 129341157.6700.
+    #
+    # NOT a `sum()` defect, though this comment said so for a while and the
+    # family's plan inherited the mistake. `sum()` is fine: a fresh
+    # `CREATE TABLE t AS SELECT CAST(1.5 AS DECIMAL(19,4)) AS m` answers
+    # `typeof(sum(m))` with `decimal(29,4)`, correctly. The cause is that
+    # databricks-emulator registers decimal columns in Unity Catalog with
+    # `type_name: DOUBLE` (`internal/sqlshim/shim.go`, `sparkToUC`), while the
+    # Delta log, the Parquet physical type and `DESCRIBE` all still say
+    # `decimal(19,4)`. The planner trusts UC, so the column reads as a float.
+    # See databricks-emulator#46 -- and note the emulator does this because
+    # Sail's unity provider rejects `decimal(p,s)` outright, so the eventual
+    # fix is probably upstream of both.
     #
     # The cast recovers the value because money is defined to four decimal
     # places and the error is eight orders of magnitude below that. It does NOT
-    # repair the column, and is not meant to: the demotion is an engine defect
-    # worth reporting upstream, and this line only stops a serialisation
+    # repair the column and is not meant to: this line only stops a read-path
     # artefact from being mistaken for two runtimes disagreeing about revenue.
     # Cast to STRING in SQL as well, so the exact digits survive a JSON number.
     money = "CAST(CAST(coalesce(sum({}),0) AS DECIMAL(19,4)) AS STRING)"
