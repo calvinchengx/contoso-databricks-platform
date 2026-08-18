@@ -27,7 +27,7 @@ import os
 import time
 
 import landing
-from confluent_kafka import Consumer, TopicPartition
+from confluent_kafka import Consumer, KafkaError, KafkaException, TopicPartition
 
 from sources import ERP_DB, ERP_HOST, ERP_PORT, ERP_TOPIC, ERP_USER, REDPANDA
 
@@ -53,12 +53,27 @@ COLUMNS = [
 ]
 
 
-def watermark(consumer: Consumer) -> int:
-    _, high = consumer.get_watermark_offsets(TopicPartition(TOPIC, 0), timeout=30)
+def watermark(consumer: Consumer) -> int | None:
+    """The topic's high offset, or None while the topic does not exist yet.
+
+    A MISSING TOPIC IS NOT AN ERROR HERE, it is a vendor that has not finished
+    becoming real. The platform starts the seeder as a one-shot container and
+    `compose up --wait` does not wait for it -- so on a genuinely cold stack
+    this step can reach the broker before Debezium has created the topic, and
+    librdkafka answers `_UNKNOWN_PARTITION`. That surfaced as a stack trace
+    naming a partition, which reads like a broker fault rather than a race.
+    """
+    try:
+        _, high = consumer.get_watermark_offsets(TopicPartition(TOPIC, 0), timeout=30)
+    except KafkaException as exc:
+        if exc.args and getattr(exc.args[0], "code", None) == KafkaError._UNKNOWN_PARTITION:
+            return None
+        raise
     return high
 
 
-def settled(consumer: Consumer, polls: int = 3, gap: float = 5.0) -> int:
+def settled(consumer: Consumer, polls: int = 3, gap: float = 5.0,
+            appear: float = 300.0) -> int:
     """The high watermark, once it has stopped moving.
 
     THE ALTERNATIVE IS A SLEEP, and a fixed wait is a flake generator: it
@@ -71,10 +86,27 @@ def settled(consumer: Consumer, polls: int = 3, gap: float = 5.0) -> int:
     reconciles the stream's net effect against the source table. A connector
     that died mid-replay is perfectly stable too.
     """
+    # WAIT FOR THE TOPIC TO EXIST FIRST, then for it to stop growing. These are
+    # two different waits: the vendor has to become real before its stream can
+    # settle, and conflating them would make a cold start indistinguishable
+    # from a connector that captured nothing.
+    waited = 0.0
+    while watermark(consumer) is None:
+        if waited >= appear:
+            raise SystemExit(
+                f"topic {TOPIC!r} does not exist after {appear:.0f}s. The ERP "
+                f"vendor never finished being seeded -- check the seeder "
+                f"container: it registers the Debezium connector and replays "
+                f"the vendor's history, and it is a one-shot that compose does "
+                f"not wait for."
+            )
+        time.sleep(gap)
+        waited += gap
+
     stable, last = 0, -1
     while stable < polls:
         high = watermark(consumer)
-        stable = stable + 1 if high == last and high > 0 else 0
+        stable = stable + 1 if high == last and high and high > 0 else 0
         last = high
         if stable < polls:
             time.sleep(gap)
@@ -179,12 +211,31 @@ def main() -> int:
     # notices, because the ERP's own row count cannot be short with it.
     surviving = surviving_customers()
     net = by_op["I"] - by_op["D"]
-    assert net == surviving, (
-        f"the captured stream implies {net:,} surviving customers "
-        f"({by_op['I']:,} inserted − {by_op['D']:,} deleted) but the ERP holds "
-        f"{surviving:,}. The stream is short: Debezium did not capture the "
-        f"whole replay."
-    )
+    # DIAGNOSE THE DIRECTION. This originally said only "the stream is short",
+    # which is one of two ways the arithmetic can fail and was the wrong one
+    # the first time it fired: a second `make verify` replayed the vendor's
+    # history into a broker that still held the first run's events, so the
+    # stream carried exactly twice the inserts while the ERP table -- which the
+    # seeder truncates -- held one replay's worth. A guard that names the wrong
+    # cause sends you looking at Debezium when the fault is a topic that was
+    # never cleared.
+    if net != surviving:
+        if net > surviving:
+            raise SystemExit(
+                f"the captured stream implies {net:,} surviving customers "
+                f"({by_op['I']:,} inserted − {by_op['D']:,} deleted) but the ERP "
+                f"holds {surviving:,}. The stream is LONGER than the source: the "
+                f"vendor's history has been replayed into a topic that still held "
+                f"an earlier run. The seeder truncates the TABLE; it does not "
+                f"clear the BROKER. Take the vendor stack down with its volumes "
+                f"(`make down` removes them) before re-running."
+            )
+        raise SystemExit(
+            f"the captured stream implies {net:,} surviving customers "
+            f"({by_op['I']:,} inserted − {by_op['D']:,} deleted) but the ERP holds "
+            f"{surviving:,}. The stream is SHORT: Debezium did not capture the "
+            f"whole replay."
+        )
 
     # Parquet, because that is what a CDC sink lands and what a columnar read
     # downstream expects.
