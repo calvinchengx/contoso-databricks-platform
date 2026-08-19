@@ -32,6 +32,16 @@ jobs:
         with:
           repository: calvinchengx/databricks-emulator
           path: databricks-emulator
+      # THE PRODUCT THIS PLATFORM RUNS. It is a separate repository now: this
+      # one holds compose, the pins and the vendor generator, and nothing that
+      # names Contoso. `make verify` without a PRODUCT would run the ./product
+      # mount point, which is empty -- so a run that forgot this would fail at
+      # the first step rather than quietly verifying nothing, but it would fail
+      # for a confusing reason.
+      - uses: actions/checkout@v7
+        with:
+          repository: calvinchengx/contoso-data-product-databricks-jobs
+          path: contoso-data-product-databricks-jobs
       # The vendors this stack pulls from are DECLARED in contoso-sources and
       # materialised from it, so both doctor.py and compose.py hard-require the
       # checkout beside this one -- `ROOT.parent / "contoso-sources"`, which is
@@ -76,7 +86,7 @@ jobs:
       - run: make doctor
       - run: make config
       - run: make up
-      - run: make verify
+      - run: make verify PRODUCT=../contoso-data-product-databricks-jobs
       - if: github.event_name == 'repository_dispatch'
         name: Adopt the version this run just verified
         env:
