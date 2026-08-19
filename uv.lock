@@ -374,7 +374,7 @@ engine = [
 requires-dist = [
     { name = "confluent-kafka", specifier = ">=2.5,<3" },
     { name = "contoso-data-product", url = "https://github.com/calvinchengx/contoso-data-product/releases/download/v0.3.0/contoso_data_product-0.3.0-py3-none-any.whl" },
-    { name = "databricks-target", url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.5/databricks_target-0.1.0-py3-none-any.whl" },
+    { name = "databricks-target", url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.6/databricks_target-0.1.0-py3-none-any.whl" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pyarrow", specifier = ">=18,<24" },
     { name = "requests", specifier = ">=2.32,<3" },
@@ -408,9 +408,9 @@ wheels = [
 [[package]]
 name = "databricks-target"
 version = "0.1.0"
-source = { url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.5/databricks_target-0.1.0-py3-none-any.whl" }
+source = { url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.6/databricks_target-0.1.0-py3-none-any.whl" }
 wheels = [
-    { url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.5/databricks_target-0.1.0-py3-none-any.whl", hash = "sha256:fed4d8ec538ba1c9d5ddf1e35e7c8408d77288a71f78504dd635ca75df4f1ec5" },
+    { url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.6/databricks_target-0.1.0-py3-none-any.whl", hash = "sha256:7ca7456103fd336cb53c6b27e167a941b4bd9e6fec48f5deaf6d8fbee9926d48" },
 ]
 
 [package.metadata]
