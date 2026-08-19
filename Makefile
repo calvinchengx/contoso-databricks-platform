@@ -63,4 +63,6 @@ test:
 	$(UV) run --frozen --group dev python -m pytest tests -q
 
 lint:
-	$(UV) run --frozen --group dev python -m ruff check platform tests scripts
+# platform/ went to contoso-data-product-databricks-jobs when this repo became
+# a platform; its steps are linted there. scripts and tests are what is left.
+	$(UV) run --frozen --group dev python -m ruff check tests scripts

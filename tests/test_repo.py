@@ -254,7 +254,13 @@ def test_acceptance_checks_out_every_repository_the_stack_reads():
     first"), because mokapi serves the exports from that directory; an
     unmaterialised checkout stands up vendors that answer nothing.
     """
-    wf = (ROOT / ".github" / "workflows" / "acceptance.yml").read_text(encoding="utf-8")
+    raw = (ROOT / ".github" / "workflows" / "acceptance.yml").read_text(encoding="utf-8")
+    # Comments are stripped before anything is looked up. The prose above the job
+    # names the targets it is explaining -- `make verify` appears in a comment far
+    # above the step that runs it -- so `raw.index` finds the comment and the
+    # ordering below fails on a workflow that is correctly ordered. Presence is
+    # checked here too: a commented-out checkout must not satisfy this test.
+    wf = "\n".join(ln for ln in raw.splitlines() if not ln.lstrip().startswith("#"))
     assert "repository: calvinchengx/contoso-sources" in wf, (
         "acceptance must check out contoso-sources beside this repository, or "
         "doctor.py exits before the emulator is ever started"
