@@ -304,6 +304,35 @@ def test_the_platform_holds_no_product():
         if "contoso" in code.lower() and "contoso-sources" not in code:
             raise AssertionError(f"the Makefile names a product: {line.strip()!r}")
 
+    # The Makefile was the only thing checked, and that is how a whole dbt
+    # PROJECT survived the split sitting in gold/: `dbt_project.yml` and
+    # `profiles.yml`, byte-identical to the product's copies, naming
+    # `contoso_gold`. A platform holds no product artifact, and a dbt project
+    # is one -- it declares models, materializations and a profile, which are
+    # the product's decisions, not the platform's.
+    #
+    # ./product is exempt: that is the mount point where a product is supplied,
+    # so a dbt project appearing THERE is the product being run, not the
+    # platform holding one.
+    strays = [
+        d.relative_to(ROOT).as_posix()
+        for d in ROOT.rglob("dbt_project.yml")
+        if "product" not in d.relative_to(ROOT).parts[:1] and ".venv" not in d.parts
+    ]
+    assert not strays, (
+        f"the platform holds a dbt project: {strays}. Models, macros and the "
+        f"profile belong to whichever product PRODUCT points at."
+    )
+
+    # And it must not install dbt either: a dependency the platform cannot use
+    # is a dependency whose advisories it still inherits, which is exactly how
+    # four sqlparse CVEs arrived here through dbt-core.
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    for line in pyproject.splitlines():
+        code = line.split("#", 1)[0]
+        if "dbt" in code.lower():
+            raise AssertionError(f"the platform declares a dbt dependency: {line.strip()!r}")
+
 
 def test_the_product_is_supplied_as_a_path():
     """PRODUCT is how the platform learns what to run, and it is a PATH.

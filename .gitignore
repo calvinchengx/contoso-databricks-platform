@@ -6,6 +6,11 @@ bronze_metrics.json
 silver_metrics.json
 product_snapshot.json
 catalog.json
+# gold/ is NOT this repository's. The product owns its dbt project and stages
+# models into its own gold/ at run time. These entries stay because a stale
+# gold/ from before the platform split still exists in working copies, and
+# un-ignoring it makes git offer to commit the product's compiled artifacts
+# into the platform -- 45k lines of exactly the thing the split removed.
 gold/models/
 gold/macros/
 gold/tests/
