@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+import re
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -41,33 +42,6 @@ def test_makefile_survives_cmd_exe():
                 continue
             if line.startswith("\t"):
                 assert bad not in line, f"cmd.exe-unsafe recipe: {line!r}"
-
-
-def test_emulator_only_in_target_resolver():
-    """localhost / seeded PAT must not appear outside platform/target.py and compose."""
-    allowed = {
-        ROOT / "platform" / "target.py",
-        ROOT / "platform" / "spark_session.py",
-        ROOT / "platform" / "gold.py",
-        ROOT / "platform" / "govern.py",
-        ROOT / "gold" / "profiles.yml",
-    }
-    hits = []
-    for p in (ROOT / "platform").glob("*.py"):
-        if p in allowed:
-            continue
-        text = p.read_text(encoding="utf-8")
-        if "127.0.0.1:18470" in text or "admin.pat" in text:
-            hits.append(p.name)
-    assert hits == []
-
-
-def test_product_is_imported_not_restated():
-    bronze = (ROOT / "platform" / "bronze.py").read_text(encoding="utf-8")
-    silver = (ROOT / "platform" / "silver.py").read_text(encoding="utf-8")
-    assert "from contoso_product import run_bronze" in bronze
-    assert "from contoso_product import run_silver" in silver
-    assert "decimal(19,4)" not in silver
 
 
 def test_the_target_wheel_matches_the_pinned_release():
@@ -143,59 +117,6 @@ def test_set_release_moves_only_the_emulator_pin(tmp_path, monkeypatch):
     assert sail in new
 
 
-def test_ingest_pulls_from_vendors_rather_than_writing_fixtures():
-    """No ingest step may author the data it claims to have ingested.
-
-    This platform used to write a handful of literal rows here -- three
-    customers, two orders -- and every number it published downstream was then
-    true about a fixture it had invented. Worse, it looked identical to a real
-    run: green pipeline, populated star, a gold snapshot with numbers in it.
-    The defect was only visible by comparing against the Fabric runtime, which
-    is precisely the comparison the invented fixture made meaningless.
-
-    So the rule is structural: an ingest step fetches, it does not compose. A
-    literal row written to the landing directory is the failure this catches.
-    """
-    import re
-
-    root = ROOT / "platform"
-    offenders = []
-    for p in sorted(root.glob("ingest*.py")):
-        text = p.read_text(encoding="utf-8")
-        # A docstring may describe the old behaviour; code may not perform it.
-        body = re.sub(r'"""(?:.|\n)*?"""', "", text)
-        for marker in ("customer_id,name,email", "write_text("):
-            if marker in body:
-                offenders.append(f"{p.name}: {marker}")
-    assert not offenders, (
-        "an ingest step is composing bytes rather than fetching them: "
-        + str(offenders)
-    )
-
-
-def test_no_vendor_credential_is_written_in_this_repository():
-    """Keys come from the vendor or the environment, never from the tree.
-
-    `seed_secrets.py` used to carry `string_value="pos-dev-key"` -- a
-    credential in the source tree, and the WRONG one: the vendor issues
-    `pos-key-8843-dev`, so anything reading that scope entry would have been
-    refused 401 by the very vendor it was seeded for. Both halves of that are
-    worth failing on.
-    """
-    suspicious = []
-    for p in sorted((ROOT / "platform").glob("*.py")):
-        text = p.read_text(encoding="utf-8")
-        for line in text.splitlines():
-            if line.lstrip().startswith("#"):
-                continue
-            if "string_value=" in line and '"' in line.split("string_value=", 1)[1]:
-                suspicious.append(f"{p.name}: {line.strip()}")
-    assert not suspicious, (
-        "a literal credential is being written into the secret scope: "
-        + str(suspicious)
-    )
-
-
 def test_the_vendor_stack_is_generated_from_the_sources_declaration():
     """The vendors are contoso-sources', not this repository's.
 
@@ -252,48 +173,6 @@ def test_vendor_host_ports_do_not_collide_with_the_fabric_platform():
     ours = {ns["HOST_BASE"] + i for i in range(3)} | {
         ns["ERP_DB_HOST_PORT"], ns["ERP_BROKER_HOST_PORT"], ns["ERP_CONNECT_HOST_PORT"]}
     assert not (ours & fabric), f"host ports collide with fabric-platform-notebook-pipelines: {ours & fabric}"
-
-
-def test_gold_records_the_measurement_and_still_fails():
-    """A failing contract must not erase the numbers, or hide behind them.
-
-    Recording a measurement and asserting a pass are two things. This step used
-    to do both at once: a failing contract stopped the snapshot being written,
-    so the failure took the evidence with it — and this runtime's gold is
-    correct, its aggregates identical to Fabric's, with the two failing
-    contracts failing on an emulator defect rather than a product one. Refusing
-    to publish removed the cell from the comparison the family exists to make.
-
-    Both halves are load-bearing, so both are checked: the snapshot is written
-    BEFORE the exit, and the exit still happens.
-    """
-    gold = (ROOT / "platform" / "gold.py").read_text(encoding="utf-8")
-    write = gold.index('Path("product_snapshot.json").write_text')
-    raise_after = gold.index("gold's numbers were recorded, and this run FAILED")
-    assert write < raise_after, (
-        "the snapshot must be written before the run fails, or a failing "
-        "contract erases the evidence along with the pass"
-    )
-    assert "contract_failures" in gold, (
-        "the failures must travel with the numbers; a snapshot recorded "
-        "without them is the stale-snapshot failure again"
-    )
-
-
-def test_contract_results_come_from_the_test_invocation():
-    """dbt overwrites run_results.json, and `dbt run` shares the target dir.
-
-    Read without checking which command wrote it, the file reports a `dbt run`:
-    nine model rows, zero failures. Believed, that publishes a snapshot
-    asserting NO contract failures on a run where two failed — the precise
-    false green this design exists to prevent. Measured, not hypothesised: it
-    is what the artefact said when inspected after a later `dbt run`.
-    """
-    gold = (ROOT / "platform" / "gold.py").read_text(encoding="utf-8")
-    assert 'which != "test"' in gold, (
-        "gold.py must refuse a run_results.json written by anything other than "
-        "`dbt test` before reporting contract results from it"
-    )
 
 
 def test_the_locked_wheel_matches_the_pinned_release():
@@ -390,3 +269,46 @@ def test_acceptance_checks_out_every_repository_the_stack_reads():
             f"`make sources` must run before `{target}`; the vendors have to "
             f"exist before anything reads them"
         )
+
+
+def test_the_platform_holds_no_product():
+    """The platform is compose, pins, vendors and scripts. Nothing Contoso.
+
+    This repository used to contain its own product: eighteen step modules --
+    ingest, the medallion runners, the target binding -- sitting in `platform/`
+    beside the compose files. That made the cell's name a half-truth, and it
+    made "a second product can use this platform unchanged" untestable, because
+    there was no second thing to point it at.
+
+    The split line is `00-family.md`'s, not this file's invention: a platform
+    holds no Contoso name and no product file. `fabric-platform-airflow3`, the
+    cell that already got this right, has no `platform/` directory at all —
+    it takes PRODUCT as a path and the product carries its own task code.
+    """
+    assert not (ROOT / "platform").exists(), (
+        "a platform/ directory is back — the product's steps belong in the leaf"
+    )
+
+    # The Makefile may name the vendors repo (it consumes one) but never a
+    # product: `./product` is a mount point, and a default naming Contoso would
+    # put the identifier straight back.
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    for line in makefile.splitlines():
+        code = line.split("#", 1)[0]
+        if "contoso" in code.lower() and "contoso-sources" not in code:
+            raise AssertionError(f"the Makefile names a product: {line.strip()!r}")
+
+
+def test_the_product_is_supplied_as_a_path():
+    """PRODUCT is how the platform learns what to run, and it is a PATH.
+
+    A name would mean this platform could only ever run one product, which is
+    the property the family is trying to demonstrate is false.
+    """
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    assert re.search(r"^PRODUCT \?= \./product$", makefile, re.M), (
+        "PRODUCT must default to the ./product mount point"
+    )
+    # `cd &&` is not available on cmd.exe, which is why the steps run through
+    # `uv run --directory` instead.
+    assert "--directory $(PRODUCT)" in makefile

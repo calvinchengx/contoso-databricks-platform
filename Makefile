@@ -7,13 +7,30 @@ endif
 
 UV ?= uv
 
-.PHONY: help doctor up down config verify test lint
+# PRODUCT IS A PATH, NOT A NAME. This Makefile contains no product identifier,
+# which is the property that makes "a second product can use this platform
+# unchanged" a fact rather than an aspiration -- the same contract
+# fabric-platform-airflow3 has carried since it was built.
+#
+# `uv run --directory` rather than `cd &&`: the recipes here must survive
+# cmd.exe, where `&&` is not available, and test_makefile_survives_cmd_exe
+# fails on one. It also puts the product's own venv and its own working
+# directory under the step, so its outputs land in the product rather than
+# scattered through the platform.
+# `./product` is an empty, gitignored mount point -- clone or symlink a product
+# there, or pass PRODUCT=../my-product. Naming a default product here would put
+# a Contoso identifier in the platform, which is the thing this is avoiding.
+PRODUCT ?= ./product
+STEP := $(UV) run --directory $(PRODUCT) --frozen
+
+.PHONY: help doctor up down config token verify test lint
 
 help:
 	@echo "  doctor   Check prerequisites"
 	@echo "  up       Start databricks-emulator + Sail + UC + OpenMetadata"
 	@echo "  down     Stop the stack"
 	@echo "  config   Show the resolved compose config (proves the pin)"
+	@echo "  token    Put the workspace credential where the product reads it"
 	@echo "  verify   Provision, ingest, bronze, silver, gold, govern"
 	@echo "  test     Repo-boundary tests (no Docker)"
 
@@ -29,15 +46,18 @@ down:
 config:
 	$(UV) run --frozen --group dev python scripts/compose.py config
 
-verify: doctor
-	$(UV) run --frozen --group engine python platform/provision.py
-	$(UV) run --frozen --group engine python platform/seed_secrets.py
-	$(UV) run --frozen --group engine python platform/ingest.py
-	$(UV) run --frozen --group engine python platform/bronze.py
-	$(UV) run --frozen --group engine python platform/silver.py
-	$(UV) run --frozen --group engine python platform/register.py
-	$(UV) run --frozen --group dbt python platform/gold.py
-	$(UV) run --frozen --group engine python platform/govern.py
+token:  ## Put the workspace credential where the product can read it
+	$(UV) run --frozen --group dev python scripts/compose.py cp databricks:/data/admin.pat $(PRODUCT)/data/admin.pat
+
+verify: doctor token
+	$(STEP) --group engine python steps/provision.py
+	$(STEP) --group engine python steps/seed_secrets.py
+	$(STEP) --group engine python steps/ingest.py
+	$(STEP) --group engine python steps/bronze.py
+	$(STEP) --group engine python steps/silver.py
+	$(STEP) --group engine python steps/register.py
+	$(STEP) --group dbt python steps/gold.py
+	$(STEP) --group engine python steps/govern.py
 
 test:
 	$(UV) run --frozen --group dev python -m pytest tests -q

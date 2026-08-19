@@ -19,3 +19,6 @@ data/
 
 # Generated from contoso-sources at `make up` -- never edited, never committed.
 compose/.generated/
+
+# The product this platform is pointed at -- a mount point, never content.
+product
