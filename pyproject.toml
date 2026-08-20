@@ -34,7 +34,7 @@ package = false
 # what anyone else can do with one. The tag here is kept equal to
 # DATABRICKS_EMULATOR_VERSION in versions.env by `scripts/set_release.py`, and
 # `test_the_target_wheel_matches_the_pinned_release` fails if they ever drift.
-databricks-target = { url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.7/databricks_target-0.1.0-py3-none-any.whl" }
+databricks-target = { url = "https://github.com/calvinchengx/databricks-emulator/releases/download/v0.2.9/databricks_target-0.1.0-py3-none-any.whl" }
 # The published wheel, for the same reason as the line above: a consumer that
 # reads a sibling's source tree is not consuming anything anyone else can get.
 # With both dependencies coming from releases, this repository finally clones

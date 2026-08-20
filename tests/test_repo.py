@@ -314,10 +314,25 @@ def test_the_platform_holds_no_product():
     # ./product is exempt: that is the mount point where a product is supplied,
     # so a dbt project appearing THERE is the product being run, not the
     # platform holding one.
+    #
+    # ./data is exempt for the same reason one step further out: it is the
+    # EMULATOR'S OWN STATE DIRECTORY, bind-mounted into the container and
+    # gitignored, alongside the PAT, the OIDC keys and the secret store. Now
+    # that gold runs as a Jobs `dbt_task`, the step uploads the product's
+    # project to `/Workspace/contoso/gold`, and the workspace store is a
+    # directory on this side of the mount -- so a real dbt project appears
+    # under `data/workspace/` on every run. That is the product being RUN,
+    # recorded by the emulator, not the platform holding a product: nothing
+    # there is authored here and nothing there is committed.
+    #
+    # Exempted by name rather than by widening the glob, because the thing this
+    # test exists to catch -- a project checked in under `gold/`, which is
+    # exactly how one survived the split -- must still fail.
     strays = [
         d.relative_to(ROOT).as_posix()
         for d in ROOT.rglob("dbt_project.yml")
-        if "product" not in d.relative_to(ROOT).parts[:1] and ".venv" not in d.parts
+        if d.relative_to(ROOT).parts[0] not in ("product", "data")
+        and ".venv" not in d.parts
     ]
     assert not strays, (
         f"the platform holds a dbt project: {strays}. Models, macros and the "

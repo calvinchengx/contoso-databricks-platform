@@ -82,6 +82,12 @@ services:
       DATABRICKS_DISABLE_TLS: "1"
       DATABRICKS_DATA_DIR: /data
       DATABRICKS_PUBLIC_URL: http://127.0.0.1:18470
+      # WHAT THE AGENT USES, which is not what the client uses. The client runs
+      # on the host and reaches this container through the published port; the
+      # agent is a sibling container, where 127.0.0.1:18470 is the agent itself.
+      # A dbt_task's generated profile is handed to the agent, so it must carry
+      # this name or dbt never reaches the warehouse.
+      DATABRICKS_AGENT_URL: http://databricks:8447
       DATABRICKS_SPARK_CONNECT_URL: http://spark-agent:8099
       DATABRICKS_SPARK_CONNECT_GRPC_URL: http://sail:50051
       DATABRICKS_UC_URL: http://uc:8080
