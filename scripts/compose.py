@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -89,7 +91,103 @@ def main() -> int:
     env.setdefault("DATABRICKS_DATA", str(ROOT / "data"))
     Path(env["DATABRICKS_DATA"]).mkdir(parents=True, exist_ok=True)
     os.chmod(env["DATABRICKS_DATA"], 0o777)
-    return subprocess.call(cmd, cwd=ROOT, env=env)
+    rc = subprocess.call(cmd, cwd=ROOT, env=env)
+    if args and args[0] == "up":
+        rc = wait_for_jobs(cmd[:-len(args)], env, rc)
+    return rc
+
+
+def wait_for_jobs(base: list[str], env: dict, rc: int) -> int:
+    """`up --wait` starts the one-shot jobs. It does not wait for them to DO
+    anything, and the next step needs them finished.
+
+    PORTED FROM snowflake-platform-tasks, which paid for this in both
+    directions before getting it right. This cell has the same two steps that
+    are not servers -- `contoso-erp-seed` replays the vendor's history into its
+    database, and `om-migrate` migrates OpenMetadata's schema -- and its
+    nightly acceptance failed the same way on 2026-08-21:
+
+        Container compose-om-migrate-1  Exited
+        container compose-contoso-erp-seed-1 exited (0)
+        make: *** [Makefile:41: up] Error 1
+
+    A job that has FINISHED is "not running" to `--wait`, so `up` returned 1
+    on a stack that had come up correctly, and CI stopped before `make verify`
+    with the failure reported against a step that never ran. The run the day
+    before passed: whether the seed had finished by the time `--wait` looked
+    is a race, which is why this was green once and red the next morning.
+
+    The other direction is worse and is why "accept running" is not the fix:
+    a job STILL RUNNING is "started", so `up` would return while the ERP seed
+    was mid-replay and ingest would read a database with nothing in it.
+
+    So the wait is on completion: every `restart: no` service must have exited,
+    and exited 0. Bounded, because a seed that never finishes is a fault to
+    report rather than to hang on.
+    """
+    jobs = one_shot_services(base, env)
+    if not jobs:
+        return rc
+    deadline = time.time() + 600.0
+    while True:
+        states = service_states(base, env)
+        if states is None:
+            return rc
+        pending = [j for j in jobs if states.get(j, ("", 0))[0] != "exited"]
+        failed = [f"{j}: exited {states[j][1]}" for j in jobs
+                  if states.get(j, ("", 0))[0] == "exited" and states[j][1] != 0]
+        if failed:
+            print("compose: " + "; ".join(failed))
+            return rc or 1
+        if not pending:
+            break
+        if time.time() >= deadline:
+            print(f"compose: still running after 600s: {', '.join(pending)}")
+            return rc or 1
+        time.sleep(2.0)
+
+    # A service that has exited 0 is fine whether or not compose declares it
+    # `restart: no`: om-migrate does not, and flagging it broken for finishing
+    # its job was the snowflake port's first mistake in the other direction.
+    broken = [f"{n}: {s} ({c})" for n, (s, c) in service_states(base, env).items()
+              if s not in ("running", "restarting") and not (s == "exited" and c == 0)]
+    if broken:
+        print("compose: " + "; ".join(broken))
+        return rc
+    print(f"compose: up -- services running, jobs finished ({', '.join(sorted(jobs))})")
+    return 0
+
+
+def one_shot_services(base: list[str], env: dict) -> set[str]:
+    """Services compose declares `restart: no` -- steps, not servers."""
+    out = subprocess.run(base + ["config", "--format", "json"],
+                         cwd=ROOT, env=env, capture_output=True, text=True)
+    if out.returncode != 0:
+        return set()
+    try:
+        cfg = json.loads(out.stdout)
+    except json.JSONDecodeError:
+        return set()
+    return {n for n, s in cfg.get("services", {}).items() if s.get("restart") == "no"}
+
+
+def service_states(base: list[str], env: dict):
+    """{service: (state, exit_code)} for everything compose knows about."""
+    ps = subprocess.run(base + ["ps", "-a", "--format", "json"],
+                        cwd=ROOT, env=env, capture_output=True, text=True)
+    if ps.returncode != 0 or not ps.stdout.strip():
+        return None
+    states = {}
+    for line in ps.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            svc = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        states[svc.get("Service", "?")] = (svc.get("State", ""), svc.get("ExitCode", 0))
+    return states
 
 
 if __name__ == "__main__":
