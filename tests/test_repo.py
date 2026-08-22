@@ -236,6 +236,35 @@ def test_the_acceptance_run_adopts_every_file_the_bump_touches():
     )
 
 
+def test_the_acceptance_run_asserts_the_numbers_and_not_only_the_run():
+    """A nightly that proves the pipeline RAN proves nothing about the answer.
+
+    G50: across all seven platforms with an acceptance workflow, none compared a
+    snapshot against an expected value. `steps/gold.py` writes
+    product_snapshot.json and nothing read it back, so gold could have returned
+    different money indefinitely behind a green tick.
+
+    The core checkout must be PINNED. Left tracking main, this cell's
+    expectations could move without a reviewed commit here -- a nightly that
+    another repository can turn green.
+    """
+    raw = (ROOT / ".github" / "workflows" / "acceptance.yml").read_text(encoding="utf-8")
+    wf = "\n".join(ln for ln in raw.splitlines() if not ln.lstrip().startswith("#"))
+    assert "scripts/assert_snapshot.py" in wf, (
+        "the acceptance run never asserts the figures core publishes"
+    )
+    assert "product_snapshot.json" in wf, (
+        "the assert step names no snapshot, so it checks nothing"
+    )
+    core = wf[wf.index("repository: calvinchengx/contoso-data-product\n") :]
+    assert re.search(r"ref: [0-9a-f]{40}", core[: core.index("path:")]), (
+        "the contoso-data-product checkout is not pinned to a commit"
+    )
+    assert wf.index("make verify") < wf.index("scripts/assert_snapshot.py"), (
+        "the numbers are asserted before the run that produces them"
+    )
+
+
 def test_acceptance_checks_out_every_repository_the_stack_reads():
     """doctor.py and compose.py hard-require a contoso-sources checkout.
 
