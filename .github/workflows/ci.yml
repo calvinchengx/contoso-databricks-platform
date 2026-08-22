@@ -35,6 +35,15 @@ jobs:
       - uses: actions/checkout@v7
         with:
           path: databricks-platform-jobs
+      # THE VENDOR DECLARATION, beside this repository. `scripts/sources.py`
+      # generates the vendor compose fragment from it, and the test that keeps
+      # `vendor-ports.json` honest regenerates that fragment. Without this the
+      # test cannot run, and a version of it that SKIPPED instead of failing
+      # would have gone green here by never running at all.
+      - uses: actions/checkout@v7
+        with:
+          repository: calvinchengx/contoso-sources
+          path: contoso-sources
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
           version: "0.12.3"
